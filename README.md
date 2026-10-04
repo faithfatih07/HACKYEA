@@ -1,4 +1,4 @@
-# Fieldnote — çiftliğin dijital defteri
+# Agrunio — çiftliğin dijital defteri
 
 Küçük çiftlikler için mobil öncelikli hackathon prototipi. React + TypeScript + Vite ile hazırlanmıştır. Türkçe varsayılandır; üstteki **TR / EN** düğmeleriyle sunum için İngilizce seçilebilir. Dil tercihi bu tarayıcıda saklanır. Anahtarsız demo gerçek kullanıcı hesabı veya servis gerektirmez. İsteğe bağlı Gemini bağlantısı sunucudaki API anahtarını kullanır; Gemini çağrıları Google hesabınızın kota/faturalandırmasına tabidir. Font ve ikonlar yereldir.
 
@@ -33,7 +33,7 @@ Fiziksel telefonda aynı Wi-Fi üzerinden denemek isterseniz:
 npm run dev -- --host 0.0.0.0
 ```
 
-Terminaldeki ağ adresini telefonda açın. Bu komut uygulamayı yerel ağda erişilebilir yapar; internete yayınlamaz. Veriler tarayıcı ve origin başına ayrı saklanır; bilgisayar ile telefon otomatik eşitlenmez.
+Terminaldeki ağ adresini telefonda açın. Bu HTTP komutu manuel kullanım içindir; kamera ve backend ile telefon testi için aşağıdaki **Telefonda kamera için yerel HTTPS** bölümünü kullanın. Uygulamayı yerel ağda erişilebilir yapar; internete yayınlamaz. Veriler tarayıcı ve origin başına ayrı saklanır; bilgisayar ile telefon otomatik eşitlenmez.
 
 ## İlk demo senaryosu
 
@@ -93,6 +93,10 @@ Murat Demir (sahip), Ali Kaya (çalışan), Ece Demir (stok sorumlusu). Kuzey 30
 ```text
 src/
   App.tsx                         Ekranlar, navigasyon ve formlar
+  scanning/                       Kod kataloğu, QR/EAN çözücü ve kamera oturumu
+  components/ProductScanner.tsx   Kamera, manuel giriş ve ürün seçimi
+  components/DemoLabels.tsx       İndirilebilir demo QR/EAN etiketleri
+  scanning.css                    Tarama ve etiket mobil düzeni
   styles.css                      Mobil/masaüstü görünüm
   operations.css                  Yetişkinlere uygun görsel sistem ve mobil düzen
   i18n/tr.json                     Türkçe arayüz ve mesajlar
@@ -291,3 +295,72 @@ Temiz demo için ayrı `http://127.0.0.1:5176` origin'i ve bellek içindeki `cre
 Canlı kontrolde modelin tüketim formunda bulunmayan tarih/saat alanlarını istemesi görüldü. Yalnızca `server/provider.ts` sistem talimatı netleştirildi: bu sorular tarih değiştirme eylemine aittir; tüketim taslağında istenmez. Özetin kaydedilmiş işlem yerine onaylanmamış taslağı anlatması istendi. Düzeltmeden sonra tüketim senaryosu gerçek API ile tekrar geçti. Arayüz, etki motoru ve onay hattı değiştirilmedi; QR/OCR eklenmedi.
 
 Son fiziksel stok **800 kg**, tüketim kaydı **yok**, Kuzey ve Doğu işleri **planlandı** olarak kaldı. API hata kodu oluşmadı. Düzeltme sonrası `npm run build` başarılı ve `npm test` **123/123** geçti. Otomatik testler yine mock provider kullanır; canlı çağrılar otomatik testlere eklenmedi. Bu yerel kontrolün ardından push yapılmadı.
+
+## QR / barkod → ürün → belgeye sor
+
+**Bugün**, **Çiftliğim** veya **Depo** ekranındaki **QR / barkod ile ürün bul** düğmesini kullanın. Doğrudan adres: `/#/scan`.
+
+- **Tara** düğmesine basılana kadar kamera izni istenmez. Yalnızca video alınır; ses, fotoğraf kaydı ve görüntü yükleme yoktur. QR ve EAN-13 okunur; arka kamera tercih edilir.
+- İlk kodda tarama durur. Ekrandan çıkınca, sekme gizlenince veya **Kamerayı kapat** seçilince track'ler kapatılır. Geç gelen izin/decoder sonuçları ve tekrar okuma aynı oturumda yeniden işlenmez.
+- İzin reddi, kamera yokluğu/meşgul oluşu, desteklenmeyen tarayıcı ve HTTPS gereksinimi açıklamalı mesajlarla gösterilir. **Kodu elle gir** her zaman kullanılabilir; kamerayla aynı kod eşleştirme fonksiyonunu kullanır.
+- Bilinen kod mevcut ürün detayını açar: fiziksel stok bağlantısı, bağlı belge bölümleri ve mevcut **Belgeye sor**. Demo İlaç B'nin fiziksel stok kaydı yoktur; miktarı bilinmiyor olarak gösterilir, sıfır uydurulmaz.
+- Bilinmeyen kod **Ürün bulunamadı** gösterir. **Katalogdan elle ürün seç → Seçilen ürünü aç** ile mevcut bir ürün seçilebilir. Yeni ürün/belge oluşturulmaz. QR içeriğindeki URL açılmaz veya sunucudan indirilmez.
+- Kod yalnızca ürün kimliğini bulur; bilgi bağlı doğrulanmış **hayalî demo belgesinden** gelir. Tarama, ürün seçimi ve belge sorusu stok değiştirmez. AI, etki motoru ve kullanıcı onayı hattı korunmuştur.
+
+### Sunum etiketleri
+
+Tarama ekranından **Demo etiketleri** düğmesine basın veya `/#/demo-labels` adresini başka bir ekranda açın. QR görselleri indirilebilir; sayfa tarayıcının yazdır komutuyla yazdırılabilir. Etiketlerde QR ve EAN-13 görselleri bulunur.
+
+| Hayalî ürün  | QR içeriği                  | Hayalî EAN-13 test kodu |
+| ------------ | --------------------------- | ----------------------- |
+| Demo Gübre A | `AGRUNIO:DEMO:FERTILIZER-A` | `2000000000015`         |
+| Demo İlaç B  | `AGRUNIO:DEMO:PESTICIDE-B`  | `2000000000022`         |
+
+Bunlar gerçek ürün etiketi veya kayıtlı ticari barkod değildir. `public/demo/` SVG dosyaları yerel ve sabittir. `npm run labels`, `src/scanning/catalog.ts` içindeki kodlardan görselleri tekrar üretir; kamera veya API anahtarı kullanmaz.
+
+### Telefonda kamera için yerel HTTPS
+
+Bilgisayardaki localhost kamera için güvenli bağlam kabul edilir. Telefonda bilgisayarın `http://192.168...` adresi güvenli bağlam değildir; manuel giriş çalışır fakat kamera için **telefonun güvendiği sertifikayla HTTPS** gerekir. [Kamera API'sinin güvenli bağlam gereksinimi](https://developer.mozilla.org/en-US/docs/Web/API/MediaDevices/getUserMedia).
+
+İsteğe bağlı yerel TLS desteği vardır; otomatik deployment veya tünel açılmaz. Mac'te Homebrew varsa [mkcert'in resmi talimatları](https://github.com/FiloSottile/mkcert#mobile-devices) ile geliştirme sertifikası oluşturabilirsiniz:
+
+```sh
+brew install mkcert
+mkcert -install
+mkdir -p .certs
+# 192.168.1.20 yerine bilgisayarınızın Wi-Fi IP adresini yazın.
+mkcert -cert-file .certs/agrunio-cert.pem -key-file .certs/agrunio-key.pem localhost 127.0.0.1 192.168.1.20
+```
+
+`mkcert -CAROOT` ile gösterilen klasördeki **rootCA.pem** sertifikasını kendi test telefonunuza yükleyip güvenilir olarak etkinleştirin. `rootCA-key.pem` özel anahtarını paylaşmayın. iOS'ta profil kurulumundan sonra Sertifika Güven Ayarları'nda tam güven etkinleştirilmelidir; Android'de CA sertifikası yükleme ayarını kullanın. İşletim sistemi sürümüne göre adımlar değişebilir. Sertifika uyarısını atlamak güvenilir sertifika kurulumunun yerine geçmez.
+
+Önce açık geliştirme sunucularını durdurup 5173 ve 3001 portlarını boşaltın. Proje klasöründe **aynı IP'yi** kullanarak:
+
+```sh
+AGRUNIO_LOCAL_HTTPS=1 AGRUNIO_PHONE_ORIGIN=https://192.168.1.20:5173 npm run demo
+```
+
+Telefon ve bilgisayar aynı Wi-Fi'de olmalıdır. Telefonda `https://192.168.1.20:5173/#/scan`, diğer ekranda `https://192.168.1.20:5173/#/demo-labels` açın. Sertifika dosyaları eksikse HTTPS modu başlamaz. `.certs/` Git tarafından yok sayılır. Vite yerel ağda dinler; API **127.0.0.1:3001** üzerinde kalır. Telefonun `/api` istekleri Vite proxy üzerinden gider; backend yalnızca açıkça ayarlanan HTTPS origin'ini ve yerel origin'leri kabul eder. Gemini anahtarı mevcut sunucu `.env` dosyasında kalır.
+
+Telefon farklı origin kullandığından kendi demo verisiyle açılır; bilgisayardaki kayıtlarla otomatik eşitlenmez. Bu sertifika/telefon kurulumunun fiziksel cihazda doğrulaması henüz yapılmadı.
+
+### Mimari, lisanslar ve kontrol
+
+- `src/scanning/catalog.ts`: sabit kod → ürün kimliği, salt okunur katalog ve manuel seçim. Store, AI veya ağ yazma erişimi yoktur.
+- `src/scanning/decoder.ts`, `camera.ts`: QR/EAN-13 çözme, tek sonuç, izin, iptal ve track temizliği. Kamera çözücüsü yalnızca tarama başlatıldığında yüklenir.
+- `ProductScanner.tsx`, `DemoLabels.tsx`, `scanning.css`: mevcut tasarımla kamera/manuel giriş ve etiket ekranları. Ürün detayı mevcut `DocumentQuestion` / `SourceCards` bileşenlerini kullanır.
+- `vite.config.ts`, `server/origin.ts`, `scripts/dev.mjs`: isteğe bağlı yerel telefon HTTPS ve proxy erişimi.
+- Kullanıcıya görünen marka **Agrunio** oldu. Veri kimlikleri, `fieldnote.demo.v2`, migration ve dil anahtarları korunmuştur; marka değişimi kayıtları sıfırlamaz.
+
+| Paket                                                 | Kullanım                                    | Lisans                                                                  |
+| ----------------------------------------------------- | ------------------------------------------- | ----------------------------------------------------------------------- |
+| [@zxing/browser](https://github.com/zxing-js/browser) | Kamera video kareleri                       | [MIT](https://github.com/zxing-js/browser/blob/master/LICENSE)          |
+| [@zxing/library](https://github.com/zxing-js/library) | QR ve EAN-13 çözme                          | [Apache-2.0](https://github.com/zxing-js/library/blob/master/LICENSE)   |
+| [qrcode](https://github.com/soldair/node-qrcode)      | Demo QR üretimi; geliştirme bağımlılığı     | [MIT](https://github.com/soldair/node-qrcode/blob/master/license)       |
+| [JsBarcode](https://github.com/lindell/JsBarcode)     | Demo EAN-13 üretimi; geliştirme bağımlılığı | [MIT](https://github.com/lindell/JsBarcode/blob/master/MIT-LICENSE.txt) |
+
+Lisans metinleri `public/licenses/` içinde de bulunur.
+
+Kontrol: **148/148 test geçti**; önceki 123 test korundu. Yeni 25 test kod/manuel giriş/seçimi, kayıtlara dokunulmadığını, bağlı belgeyi, gerçek SVG QR/EAN-13 çözümünü, kamera izni/çıkış/tekrar korumasını ve HTTPS origin sınırını doğrular. Otomatik testler kamera veya dış ağ kullanmaz. Build başarılı; Zod yorumları ve büyük bundle için engelleyici olmayan Vite uyarıları var.
+
+Ayrı 5177 demo origin'inde mobil kontrol: 390 px'de manuel EAN → Demo Gübre A, 800 kg stok, **gerçek Gemini** ile 50 kg cevabı ve `doc-fertilizer-a / packaging` kaynak metni açıldı. Bilinmeyen URL ve elle Demo İlaç B seçimi çalıştı. 320 px'de dört etiket SVG'si yüklendi ve İngilizce geçişi çalıştı. Kontrol edilen ekranlarda yatay taşma yoktu. Taslak onaylanmadı ve mevcut kullanıcı kayıtları değiştirilmedi. **Fiziksel kamera ile gerçek tarama testi yapılmadı.** OCR, PDF yükleme, gerçek ürün/barkod kataloğu ve oyun arayüzü kapsamda değildir. Push veya yayınlama yapılmadı.

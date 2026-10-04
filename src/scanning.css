@@ -1,0 +1,170 @@
+.scan-entry {
+  margin: 18px 0;
+}
+.scanner-layout {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 20px;
+}
+.scan-camera,
+.scan-manual,
+.scan-explainer {
+  padding: 22px;
+  min-width: 0;
+}
+.scan-camera h2 {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.scanner-layout p {
+  margin: 12px 0;
+}
+.scan-view {
+  position: relative;
+  background: #eaeadd;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  overflow: hidden;
+  aspect-ratio: 4 / 3;
+  margin: 18px 0;
+}
+.scan-view video {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+.scan-view.is-active {
+  background: #293e2e;
+}
+.scan-placeholder {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-direction: column;
+  gap: 14px;
+}
+.scan-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+}
+.scan-manual form {
+  display: grid;
+  gap: 12px;
+  margin: 16px 0 24px;
+}
+.scan-manual label {
+  display: block;
+  font-weight: 650;
+  margin-bottom: 8px;
+}
+.scan-manual input,
+.scan-manual select {
+  width: 100%;
+  min-width: 0;
+  min-height: 48px;
+  border-radius: 8px;
+  border: 1px solid #727b69;
+  background: #fff;
+  color: var(--ink);
+  padding: 12px;
+  font-size: 16px;
+}
+.scan-manual select {
+  margin-bottom: 12px;
+}
+.scan-not-found {
+  border-left: 4px solid #aa4935;
+  background: #fff3e9;
+  padding: 14px;
+  margin-bottom: 24px;
+}
+.scan-not-found code,
+.demo-product-label code {
+  display: block;
+  overflow-wrap: anywhere;
+  font-size: 16px;
+  margin: 10px 0;
+}
+.scan-explainer {
+  grid-column: 1 / -1;
+}
+.scan-label-intro {
+  margin-bottom: 20px;
+}
+.demo-label-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 24px;
+  margin-bottom: 20px;
+}
+.demo-product-label {
+  padding: 24px;
+  text-align: center;
+  min-width: 0;
+  background: #fff;
+}
+.demo-product-label h2 {
+  margin: 14px 0 8px;
+}
+.demo-product-label p {
+  margin-bottom: 16px;
+}
+.demo-qr {
+  display: block;
+  width: 256px;
+  max-width: 100%;
+  height: auto;
+  margin: 0 auto;
+}
+.demo-barcode {
+  display: block;
+  width: 260px;
+  max-width: 100%;
+  height: auto;
+  margin: 20px auto 0;
+}
+.demo-product-label .button {
+  margin-top: 12px;
+}
+@media (max-width: 700px) {
+  .scanner-layout,
+  .demo-label-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .scan-camera,
+  .scan-manual,
+  .scan-explainer,
+  .demo-product-label {
+    padding: 18px;
+  }
+}
+@media print {
+  body {
+    background: white;
+  }
+  .sidebar,
+  .topbar,
+  .bottom-nav,
+  .back-button,
+  .demo-product-label .button {
+    display: none !important;
+  }
+  .app-shell,
+  .main-shell {
+    display: block;
+    margin: 0;
+  }
+  .demo-product-label {
+    break-inside: avoid;
+    box-shadow: none;
+    border: 1px solid #293e2e;
+  }
+  .demo-label-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}

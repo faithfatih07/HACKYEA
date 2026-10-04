@@ -29,6 +29,7 @@ import {
   Package,
   Plus,
   RotateCcw,
+  ScanLine,
   ShieldCheck,
   Shovel,
   Sprout,
@@ -68,6 +69,8 @@ import {
 import type { DocumentInterpretation } from "./ai/schema";
 import { DocumentQuestion, SourceCards } from "./components/DocumentQuestion";
 import { AIReviewNote } from "./components/AIReviewNote";
+import { ProductScanner } from "./components/ProductScanner";
+import { DemoLabels } from "./components/DemoLabels";
 import type { AIReviewMetadata } from "./components/AIReviewNote";
 import type { ActionDraft, OperationDraft, PlanDraft } from "./domain/types";
 import {
@@ -700,6 +703,12 @@ export default function App() {
             </button>
           ))}
         </section>
+        <div className="scan-entry">
+          <button className="button light" onClick={() => go("scan")}>
+            <ScanLine size={20} />
+            {t("scanProduct")}
+          </button>
+        </div>
       </>
     );
   else if (section === "jobs" && !id)
@@ -945,6 +954,10 @@ export default function App() {
             )}
           </p>
           <div className="farm-settings">
+            <button className="button light" onClick={() => go("scan")}>
+              <ScanLine size={20} />
+              {t("scanProduct")}
+            </button>
             <button className="button light" onClick={() => setModal("docs")}>
               <FileText size={18} />
               {t("documentSupport")}{" "}
@@ -1062,6 +1075,12 @@ export default function App() {
           t("inventory"),
           t("physicalStockAndPlannedNeedsSideBySide"),
         )}
+        <div className="scan-entry">
+          <button className="button light" onClick={() => go("scan")}>
+            <ScanLine size={20} />
+            {t("scanProduct")}
+          </button>
+        </div>
         <section className="panel">
           <div className="panel-heading">
             <h2>{t("materials")}</h2>
@@ -1436,6 +1455,22 @@ export default function App() {
     ) : (
       <NotFound go={go} />
     );
+  } else if (section === "scan") {
+    content = (
+      <>
+        {back(t("inventory"), "inventory")}
+        {pageHeading(t("fictionalDemoData"), t("scanProduct"), t("scanScope"))}
+        <ProductScanner products={rawState.products} go={go} />
+      </>
+    );
+  } else if (section === "demo-labels") {
+    content = (
+      <>
+        {back(t("scanProduct"), "scan")}
+        {pageHeading("Agrunio", t("scanDemoLabels"), t("fictionalDemoData"))}
+        <DemoLabels products={rawState.products} />
+      </>
+    );
   } else if (section === "products" && id) {
     const product =
       rawState.products.find((p) => p.id === id) ??
@@ -1445,6 +1480,7 @@ export default function App() {
         {back(t("inventory"), "inventory")}
         {pageHeading(t("productRecord"), product.name, t("fictionalDemoData"))}
         <section className="panel detail-panel">
+          <p className="fine-print">{t("scanScope")}</p>
           <DetailRow label={t("priceLabel")}>
             {product.unitPrice == null
               ? t("unknownStatus")
@@ -1457,6 +1493,9 @@ export default function App() {
                 {resource(`${b.name} · ${kg(b.quantity)}`, `inventory/${b.id}`)}
               </DetailRow>
             ))}
+          {!state.stocks.some((balance) => balance.productId === id) && (
+            <p className="fine-print">{t("scanNoStockRecord")}</p>
+          )}
           <SourceCards
             sections={documentSections.filter((s) => s.productId === id)}
           />
@@ -1514,7 +1553,7 @@ export default function App() {
           <span className="brand-mark">
             <Sprout size={28} strokeWidth={2.6} />
           </span>
-          fieldnote<span>.</span>
+          Agrunio<span>.</span>
         </button>
         <div className="sidebar-farm">
           <span className="farm-initial">
@@ -1549,7 +1588,7 @@ export default function App() {
         <header className="topbar">
           <div className="mobile-brand">
             <Sprout size={24} />
-            fieldnote.
+            Agrunio
           </div>
           <div className="breadcrumb">
             {t("yourFarm")}

@@ -1,6 +1,16 @@
 import { spawn } from "node:child_process";
 const children = ["server", "dev"].map((script) =>
-  spawn("npm", ["run", script], { stdio: "inherit", env: process.env }),
+  spawn(
+    "npm",
+    [
+      "run",
+      script,
+      ...(script === "dev" && process.env.AGRUNIO_LOCAL_HTTPS === "1"
+        ? ["--", "--host", "0.0.0.0"]
+        : []),
+    ],
+    { stdio: "inherit", env: process.env },
+  ),
 );
 let closing = false;
 function stop(code = 0) {

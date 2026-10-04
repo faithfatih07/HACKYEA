@@ -3,6 +3,7 @@ import { existsSync } from "node:fs";
 import { loadEnvFile } from "node:process";
 import { GeminiProvider } from "./provider";
 import { interpretRequest } from "./service";
+import { isAllowedOrigin } from "./origin";
 
 // .env is read here only. Neither Vite nor the browser receives its contents.
 if (existsSync(".env")) {
@@ -24,11 +25,8 @@ const server = createServer(async (req, res) => {
     });
     res.end(JSON.stringify(body));
   };
-  // Local demo server: no public binding or cross-origin API access.
-  if (
-    req.headers.origin &&
-    !/^http:\/\/(127\.0\.0\.1|localhost):\d+$/.test(req.headers.origin)
-  ) {
+  // Loopback API; optional phone HTTPS origin is configured explicitly.
+  if (!isAllowedOrigin(req.headers.origin, process.env.AGRUNIO_PHONE_ORIGIN)) {
     send(403, { error: "request_rejected" });
     return;
   }
@@ -68,7 +66,5 @@ const server = createServer(async (req, res) => {
 });
 server.requestTimeout = 35_000;
 server.listen(3001, "127.0.0.1", () =>
-  console.info(
-    "Fieldnote API: http://127.0.0.1:3001 (server environment only)",
-  ),
+  console.info("Agrunio API: http://127.0.0.1:3001 (server environment only)"),
 );
