@@ -7,8 +7,11 @@ export type DocumentSection = {
   sectionId: string;
   sectionTitle: string;
   text: string;
-  documentType: "productIdentity" | "syntheticTestLabel";
-  isSyntheticDemo: true;
+  documentType: "productIdentity" | "syntheticTestLabel" | "uploadedLabel" | "uploadedPDF";
+  isSyntheticDemo: boolean;
+  sourceLanguage?: string | null;
+  fileId?: string;
+  pageNumber?: number | null;
 };
 // Read-only, reviewed fixture catalog. This is not an uploaded real product label.
 // Facts are encoded separately: a model cannot invent a conversion or waiting period.

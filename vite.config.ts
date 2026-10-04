@@ -6,9 +6,11 @@ import { readFileSync } from "node:fs";
 // credentials here; TLS files stay on the development computer.
 const phoneHttps = process.env.AGRUNIO_LOCAL_HTTPS === "1";
 
+const apiTarget = `http://127.0.0.1:${Number(process.env.AGRUNIO_API_PORT) || 3001}`;
+
 export default defineConfig({
   plugins: [react()],
-  preview: { proxy: { "/api": "http://127.0.0.1:3001" } },
+  preview: { proxy: { "/api": apiTarget } },
   server: {
     ...(phoneHttps
       ? {
@@ -21,7 +23,7 @@ export default defineConfig({
           },
         }
       : {}),
-    proxy: { "/api": "http://127.0.0.1:3001" },
+    proxy: { "/api": apiTarget },
     // Keep hot reload reliable in shared or sandboxed working folders.
     watch: {
       usePolling: true,

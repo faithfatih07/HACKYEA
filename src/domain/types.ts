@@ -1,3 +1,4 @@
+import type { UploadedDocument } from "../uploads/types";
 export type Id = string;
 export type Presentation = {
   iconKey?: string;
@@ -31,8 +32,14 @@ export type StorageLocation = Entity & {
 };
 export type Product = Entity & {
   name: string;
-  kind: "fertilizer" | "pesticide" | "seed" | "fuel";
-  unit: "kg" | "l";
+  kind: "fertilizer" | "pesticide" | "seed" | "fuel" | "unknown";
+  unit: "kg" | "l" | null;
+  manufacturer?: string | null;
+  barcode?: string | null;
+  codes?: string[];
+  batch?: string | null;
+  expiryDate?: string | null;
+  packageSize?: { quantity: number; unit: "kg" | "g" | "l" | "ml" };
   documentSourceIds: Id[];
   unitPrice?: number | null;
   currency?: string;
@@ -111,7 +118,8 @@ export type DocumentSource = Entity & {
   title: string;
   productId: Id | null;
   uri: string;
-  verification: "verified";
+  verification: "verified" | "userProvided";
+  uploaded?: UploadedDocument;
   verifiedAt: string;
   verifiedById: Id;
 };
@@ -134,7 +142,7 @@ export type EntityReference = {
 export type ActivityLogEntry = Entity & {
   draftId: Id;
   actorId: Id;
-  action: ActionDraft["kind"] | "legacyMigration";
+  action: ActionDraft["kind"] | "legacyMigration" | "importProductDocument";
   changedRecords: EntityReference[];
   createdAt: string | null;
 };

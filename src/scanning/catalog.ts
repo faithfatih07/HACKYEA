@@ -49,6 +49,10 @@ export function matchProductCode(
   const code = input.trim();
   if (!code || code.length > 512 || /[\u0000-\u001f\u007f]/.test(code))
     return { status: "invalid", code };
+  const known = products.find(
+    (p) => p.barcode === code || p.codes?.includes(code),
+  );
+  if (known) return { status: "found", code, product: known };
   const entry = demoProductCodes.find((p) => p.qr === code || p.ean13 === code);
   const product = entry
     ? selectCatalogProduct(entry.productId, products)

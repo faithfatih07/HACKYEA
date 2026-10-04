@@ -1,3 +1,9 @@
+import {
+  extractLabel,
+  answerUploadedDocument,
+  uploadMimeTypes,
+} from "./uploads";
+import { MAX_UPLOAD_BYTES } from "../src/uploads/schema";
 import { createServer } from "node:http";
 import { existsSync } from "node:fs";
 import { loadEnvFile } from "node:process";
@@ -34,11 +40,28 @@ const server = createServer(async (req, res) => {
     send(200, { configured: provider !== null });
     return;
   }
-  if (req.method !== "POST" || req.url !== "/api/interpret") {
+  if (
+    req.method !== "POST" ||
+    !["/api/interpret", "/api/label-extract", "/api/document-answer"].includes(
+      req.url ?? "",
+    )
+  ) {
     send(404, { error: "not_found" });
     return;
   }
-  if (!req.headers["content-type"]?.startsWith("application/json")) {
+  const labelUpload = req.url === "/api/label-extract";
+  const mime = req.headers["content-type"]?.split(";")[0] ?? "";
+  if (
+    labelUpload &&
+    !uploadMimeTypes.includes(mime as (typeof uploadMimeTypes)[number])
+  ) {
+    send(415, { error: "unsupported_file" });
+    return;
+  }
+  if (
+    !labelUpload &&
+    !req.headers["content-type"]?.startsWith("application/json")
+  ) {
     send(415, { error: "json_required" });
     return;
   }
@@ -47,11 +70,29 @@ const server = createServer(async (req, res) => {
     let size = 0;
     for await (const chunk of req) {
       size += chunk.length;
-      if (size > 128_000) {
+      if (size > (labelUpload ? MAX_UPLOAD_BYTES : 128_000)) {
         send(413, { error: "request_too_large" });
         return;
       }
       chunks.push(chunk);
+    }
+    if (labelUpload) {
+      try {
+        send(200, await extractLabel(Buffer.concat(chunks), mime, provider));
+      } catch {
+        send(400, { error: "invalid_file" });
+      }
+      return;
+    }
+    if (req.url === "/api/document-answer") {
+      send(
+        200,
+        await answerUploadedDocument(
+          JSON.parse(Buffer.concat(chunks).toString("utf8")),
+          provider,
+        ),
+      );
+      return;
     }
     send(
       200,
@@ -64,7 +105,10 @@ const server = createServer(async (req, res) => {
     send(400, { error: "invalid_request" });
   }
 });
-server.requestTimeout = 35_000;
-server.listen(3001, "127.0.0.1", () =>
-  console.info("Agrunio API: http://127.0.0.1:3001 (server environment only)"),
+server.requestTimeout = 90_000;
+const port = Number(process.env.AGRUNIO_API_PORT) || 3001;
+server.listen(port, "127.0.0.1", () =>
+  console.info(
+    `Agrunio API: http://127.0.0.1:${port} (server environment only)`,
+  ),
 );

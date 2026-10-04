@@ -13,5 +13,6 @@ export function useFarm() {
     confirm: repository.confirm,
     preview: repository.preview,
     reset: repository.reset,
+    confirmDocument: repository.confirmDocument,
   };
 }

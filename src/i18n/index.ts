@@ -26,3 +26,8 @@ export function formatDate(value: string) {
 export function localizeMessage(value: string) {
   return translateMessage(value, "en");
 }
+
+export function formatQuantity(value: number | null, unit: string | null) {
+  if (value === null) return t("unknownQuantity");
+  return `${new Intl.NumberFormat("en-GB", { maximumFractionDigits: 3 }).format(value)} ${unit ?? "(unit unknown)"}`;
+}

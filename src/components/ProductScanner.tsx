@@ -28,10 +28,12 @@ export function ProductScanner({
   products,
   go,
   onMatch,
+  onAddDocument,
 }: {
   products: Product[];
   go: (route: string) => void;
   onMatch?: () => void;
+  onAddDocument?: (code: string) => void;
 }) {
   useLanguage();
   const [code, setCode] = useState("");
@@ -192,6 +194,17 @@ export function ProductScanner({
             <strong>{t("scanProductMissing")}</strong>
             <code>{unknownCode}</code>
             <p>{t("scanUnknownHelp")}</p>
+            {onAddDocument && (
+              <button
+                className="button light"
+                onClick={() => {
+                  stop();
+                  onAddDocument(unknownCode);
+                }}
+              >
+                {t("uploadAdd")}
+              </button>
+            )}
           </div>
         )}
         <label htmlFor="scan-product">{t("scanChooseProduct")}</label>

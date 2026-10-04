@@ -89,7 +89,7 @@ export const contextSchema = z
       )
       .max(100),
     products: z
-      .array(named.extend({ unit: z.enum(["kg", "l"]) }).strict())
+      .array(named.extend({ unit: z.enum(["kg", "l"]).nullable() }).strict())
       .max(100),
     inventoryBalances: z
       .array(

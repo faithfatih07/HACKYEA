@@ -1,3 +1,8 @@
+import {
+  labelFieldsSchema,
+  uploadMimeTypes,
+  MAX_UPLOAD_BYTES,
+} from "../uploads/schema";
 import { isQuantity } from "./quantity";
 import type { FarmState, Schedule, Task } from "./types";
 export const isRecord = (v: unknown): v is Record<string, unknown> =>
@@ -162,8 +167,19 @@ export function isFarmState(value: unknown): value is FarmState {
           (isQuantity(p.unitPrice) &&
             text(p.currency) &&
             p.currency.length > 0)) &&
-        ["fertilizer", "pesticide", "seed", "fuel"].includes(p.kind) &&
-        ["kg", "l"].includes(p.unit) &&
+        ["fertilizer", "pesticide", "seed", "fuel", "unknown"].includes(
+          p.kind,
+        ) &&
+        (p.unit === null || ["kg", "l"].includes(p.unit)) &&
+        [p.manufacturer, p.barcode, p.batch, p.expiryDate].every(
+          (v) => v == null || text(v),
+        ) &&
+        (p.codes === undefined || ids(p.codes)) &&
+        (p.packageSize === undefined ||
+          (isRecord(p.packageSize) &&
+            isQuantity(p.packageSize.quantity) &&
+            p.packageSize.quantity > 0 &&
+            ["kg", "g", "l", "ml"].includes(p.packageSize.unit))) &&
         ids(p.documentSourceIds) &&
         p.documentSourceIds.every((d) =>
           s.documentSources.some(
@@ -177,7 +193,7 @@ export function isFarmState(value: unknown): value is FarmState {
     !s.inventoryBalances.every(
       (b) =>
         (b.quantity === null || isQuantity(b.quantity)) &&
-        s.products.some((p) => p.id === b.productId) &&
+        s.products.some((p) => p.id === b.productId && p.unit !== null) &&
         s.storageLocations.some((w) => w.id === b.storageLocationId),
     ) ||
     new Set(
@@ -313,7 +329,35 @@ export function isFarmState(value: unknown): value is FarmState {
       (d) =>
         text(d.title) &&
         text(d.uri) &&
-        d.verification === "verified" &&
+        ["verified", "userProvided"].includes(d.verification) &&
+        (d.verification !== "userProvided" ||
+          (isRecord(d.uploaded) &&
+            id(d.uploaded.fileId) &&
+            text(d.uploaded.fileName) &&
+            uploadMimeTypes.includes(d.uploaded.mimeType) &&
+            Number.isSafeInteger(d.uploaded.fileSize) &&
+            d.uploaded.fileSize > 0 &&
+            d.uploaded.fileSize <= MAX_UPLOAD_BYTES &&
+            ["gemini", "manual"].includes(d.uploaded.extractionMethod) &&
+            labelFieldsSchema.safeParse(d.uploaded.reviewedFields).success &&
+            Array.isArray(d.uploaded.sections) &&
+            d.uploaded.sections.every(isRecord) &&
+            new Set(d.uploaded.sections.map((s) => s.sectionId)).size ===
+              d.uploaded.sections.length &&
+            d.uploaded.sections.every(
+              (s) =>
+                isRecord(s) &&
+                s.sourceId === d.id &&
+                s.productId === d.productId &&
+                s.fileId === d.uploaded?.fileId &&
+                !s.isSyntheticDemo &&
+                text(s.text) &&
+                s.text.length <= 1000 &&
+                id(s.sectionId) &&
+                text(s.title) &&
+                text(s.sectionTitle) &&
+                s.pageNumber == null,
+            ))) &&
         isTimestamp(d.verifiedAt) &&
         s.people.some((p) => p.id === d.verifiedById) &&
         (d.productId === null || s.products.some((p) => p.id === d.productId)),
@@ -374,6 +418,7 @@ export function isFarmState(value: unknown): value is FarmState {
           "failTask",
           "linkServiceOffer",
           "legacyMigration",
+          "importProductDocument",
         ].includes(a.action) &&
         (a.createdAt === null || isTimestamp(a.createdAt)) &&
         Array.isArray(a.changedRecords) &&

@@ -1,3 +1,10 @@
+import {
+  commitProductDocument,
+  previewProductDocument,
+} from "../uploads/domain";
+import type { ProductDocumentDraft } from "../uploads/types";
+import type { DocumentFileStore } from "../uploads/files";
+import { validateFileBytes } from "../uploads/files";
 import { createDemoState } from "./demo";
 import { domainMessage } from "../i18n/messages";
 import { commitAction, previewAction } from "./actions";
@@ -14,6 +21,7 @@ export class FarmRepository {
     private storage: StoragePort,
     private lock: <T>(write: () => T) => Promise<T> = (write) =>
       Promise.resolve().then(write),
+    private files?: DocumentFileStore,
   ) {
     this.snapshot = loadFarm(storage);
     this.ready = this.snapshot.migrated
@@ -62,6 +70,49 @@ export class FarmRepository {
       // Publish only after persistence succeeds, so quota failures cannot half-apply.
       saveFarm(this.storage, next);
       this.publish({ state: next, error: null, migrated: latest.migrated });
+      return next;
+    });
+  previewDocument = (draft: ProductDocumentDraft) =>
+    previewProductDocument(this.snapshot.state, draft);
+  getDocumentFile = (id: string) =>
+    this.files?.get(id) ?? Promise.resolve(null);
+  confirmDocument = async (
+    draft: ProductDocumentDraft,
+    file: Blob,
+    confirmation: Confirmation,
+  ) =>
+    this.write(async () => {
+      const latest = loadFarm(this.storage);
+      if (latest.error) throw new Error(latest.error);
+      const next = commitProductDocument(latest.state, draft, confirmation);
+      if (next === latest.state) return next;
+      if (!this.files)
+        throw new Error(
+          "Document file storage is unavailable. Nothing was saved.",
+        );
+      if (file.size !== draft.fileSize || file.type !== draft.mimeType)
+        throw new Error("The original file does not match the reviewed draft.");
+      validateFileBytes(
+        new Uint8Array(await file.arrayBuffer()),
+        draft.mimeType,
+      );
+      if (await this.files.get(draft.fileId))
+        throw new Error("This file ID already exists. Start a new upload.");
+      // Persist the original first. No farm records are published if this fails.
+      await this.files.put(draft.fileId, file);
+      try {
+        saveFarm(this.storage, next);
+      } catch (error) {
+        // Cross-store rollback: metadata never points to a missing original.
+        // A failed cleanup/crash can leave an unreferenced file, never a stock receipt.
+        try {
+          await this.files.remove(draft.fileId);
+        } catch {
+          /* Unreferenced file only. */
+        }
+        throw error;
+      }
+      this.publish({ state: next, error: null, migrated: false });
       return next;
     });
   reset = () =>

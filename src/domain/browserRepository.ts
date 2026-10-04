@@ -1,3 +1,4 @@
+import { IndexedDocumentFiles } from "../uploads/files";
 import { FarmRepository } from "./repository";
 import { LEGACY_STORAGE_KEY, STORAGE_KEY } from "./storage";
 import type { StoragePort } from "./storage";
@@ -10,10 +11,13 @@ const browserStorage: StoragePort = {
 let repository: FarmRepository | undefined;
 export function getFarmRepository() {
   if (!repository) {
-    repository = new FarmRepository(browserStorage, (write) =>
-      navigator.locks
-        ? navigator.locks.request("fieldnote-demo-write", write)
-        : Promise.resolve().then(write),
+    repository = new FarmRepository(
+      browserStorage,
+      (write) =>
+        navigator.locks
+          ? navigator.locks.request("fieldnote-demo-write", write)
+          : Promise.resolve().then(write),
+      new IndexedDocumentFiles(),
     );
     window.addEventListener("storage", (event) => {
       if (

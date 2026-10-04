@@ -39,6 +39,10 @@ import {
   X,
 } from "lucide-react";
 
+import { OriginalDocument } from "./components/OriginalDocument";
+import { ProductUpload } from "./components/ProductUpload";
+import { productSections } from "./uploads/documents";
+import { formatQuantity } from "./i18n";
 import { Dialog } from "./components/Dialog";
 import { DecisionImpacts } from "./components/DecisionImpacts";
 import {
@@ -112,6 +116,7 @@ export default function App() {
     storageError,
     confirm: confirmDraft,
     reset,
+    confirmDocument,
   } = useFarm();
   const state = useMemo(
     () => localizeFarm(rawState, language),
@@ -133,7 +138,8 @@ export default function App() {
   const [aiAcknowledged, setAIAcknowledged] = useState(false);
   const [documentEntry, setDocumentEntry] = useState<{
     question: string;
-    result: DocumentInterpretation;
+    result?: DocumentInterpretation;
+    productId?: string;
   } | null>(null);
   const aiQuestionsPending = Boolean(
     aiMetadata?.questions.length && !aiAcknowledged,
@@ -145,6 +151,13 @@ export default function App() {
   const [busy, setBusy] = useState(false);
   const entryRef = useRef<HTMLTextAreaElement>(null);
   const [section, id] = route.split("/");
+  const decodeCode = (value: string) => {
+    try {
+      return decodeURIComponent(value);
+    } catch {
+      return value;
+    }
+  };
   const activeTab =
     section === "today" ? "today" : section === "jobs" ? "jobs" : "farm";
   const planned = state.jobs.filter((job) => job.status === "planned");
@@ -209,6 +222,21 @@ export default function App() {
     setAIAcknowledged(false);
     setDocumentEntry(null);
     try {
+      if (isDocumentQuestion(text)) {
+        const named = rawState.products.filter((p) =>
+          text.toLowerCase().includes(p.name.toLowerCase()),
+        );
+        if (
+          named.length === 1 &&
+          rawState.documentSources.some(
+            (d) =>
+              d.productId === named[0].id && d.verification === "userProvided",
+          )
+        ) {
+          setDocumentEntry({ question: text, productId: named[0].id });
+          return;
+        }
+      }
       const response = await requestInterpretation(text, rawState, language);
       setAIProvider(response.provider);
       if (response.provider === "gemini") {
@@ -680,6 +708,8 @@ export default function App() {
                   state={rawState}
                   initialQuestion={documentEntry.question}
                   initialResult={documentEntry.result}
+                  productId={documentEntry.productId}
+                  autoAsk={Boolean(documentEntry.productId)}
                   initialProvider={aiProvider}
                   onProvider={setAIProvider}
                 />
@@ -751,6 +781,9 @@ export default function App() {
           ))}
         </section>
         <div className="scan-entry">
+          <button className="button dark" onClick={() => go("add-product")}>
+            {t("uploadAdd")}
+          </button>
           <button className="button light" onClick={() => go("scan")}>
             <ScanLine size={20} />
             {t("scanProduct")}
@@ -1123,6 +1156,9 @@ export default function App() {
           t("physicalStockAndPlannedNeedsSideBySide"),
         )}
         <div className="scan-entry">
+          <button className="button dark" onClick={() => go("add-product")}>
+            {t("uploadAdd")}
+          </button>
           <button className="button light" onClick={() => go("scan")}>
             <ScanLine size={20} />
             {t("scanProduct")}
@@ -1166,7 +1202,7 @@ export default function App() {
                   </span>
                 </span>
                 <span className="stock-amount">
-                  <strong>{kg(stock.quantity)}</strong>
+                  <strong>{formatQuantity(stock.quantity, stock.unit)}</strong>
                   <small>{t("physicallyInStock")}</small>
                 </span>
                 <ChevronRight size={19} />
@@ -1196,6 +1232,18 @@ export default function App() {
             </button>
           ))}
         </div>
+        <section className="panel detail-panel">
+          <h2>{t("uploadCatalog")}</h2>
+          {rawState.products.map((product) => (
+            <button
+              className="button light full"
+              key={product.id}
+              onClick={() => go(`products/${product.id}`)}
+            >
+              {product.name}
+            </button>
+          ))}
+        </section>
         {consumptionPanel()}
       </>
     );
@@ -1215,13 +1263,16 @@ export default function App() {
         <div className="stock-metrics">
           <Metric
             label={t("physicallyInStock2")}
-            value={kg(stock.quantity)}
+            value={formatQuantity(stock.quantity, stock.unit)}
             tone="green"
           />
-          <Metric label={t("plannedUseRemaining")} value={kg(need)} />
+          <Metric
+            label={t("plannedUseRemaining")}
+            value={formatQuantity(need, stock.unit)}
+          />
           <Metric
             label={t("planningShortfall")}
-            value={kg(missing)}
+            value={formatQuantity(missing, stock.unit)}
             tone={missing !== null && missing > 0 ? "red" : "green"}
           />
         </div>
@@ -1261,6 +1312,8 @@ export default function App() {
           </p>
         </section>
         {jobsPanel(jobs, t("jobsUsingThisMaterial"))}
+        <DocumentQuestion state={rawState} productId={stock.productId} />
+        <SourceCards sections={productSections(rawState, stock.productId)} />
         {consumptionPanel(id)}
       </>
     ) : (
@@ -1298,7 +1351,7 @@ export default function App() {
                 >
                   <Package size={23} />
                   <strong>{stock.name}</strong>
-                  <span>{kg(stock.quantity)}</span>
+                  <span>{formatQuantity(stock.quantity, stock.unit)}</span>
                   <ChevronRight size={18} />
                 </button>
               ))
@@ -1502,6 +1555,24 @@ export default function App() {
     ) : (
       <NotFound go={go} />
     );
+  } else if (section === "add-product") {
+    content = (
+      <>
+        {back(t("inventory"), "inventory")}
+        {pageHeading("Agrunio", t("uploadAdd"), t("uploadIntro"))}
+        <ProductUpload
+          key={route}
+          state={rawState}
+          scannedCode={id ? decodeCode(id) : null}
+          confirm={confirmDocument}
+          onCancel={() => go("inventory")}
+          onSaved={(productId) => {
+            notify("uploadSaved");
+            go(`products/${productId}`);
+          }}
+        />
+      </>
+    );
   } else if (section === "scan") {
     content = (
       <>
@@ -1511,6 +1582,9 @@ export default function App() {
           products={rawState.products}
           go={go}
           onMatch={() => notify("storyScanMatched")}
+          onAddDocument={(code) =>
+            go(`add-product/${encodeURIComponent(code)}`)
+          }
         />
       </>
     );
@@ -1529,8 +1603,40 @@ export default function App() {
     content = product ? (
       <>
         {back(t("inventory"), "inventory")}
-        {pageHeading(t("productRecord"), product.name, t("fictionalDemoData"))}
+        {pageHeading(
+          t("productRecord"),
+          product.name,
+          t(
+            rawState.documentSources.some(
+              (d) => d.productId === id && d.verification === "userProvided",
+            )
+              ? "uploadSourceBadge"
+              : "fictionalDemoData",
+          ),
+        )}
         <section className="panel detail-panel product-arrival">
+          <DetailRow label={t("uploadCategory")}>{product.kind}</DetailRow>
+          <DetailRow label={t("uploadManufacturer")}>
+            {product.manufacturer ?? t("uploadUnknown")}
+          </DetailRow>
+          <DetailRow label={t("uploadPackageQuantity")}>
+            {product.packageSize
+              ? formatQuantity(
+                  product.packageSize.quantity,
+                  product.packageSize.unit,
+                )
+              : t("uploadUnknown")}
+          </DetailRow>
+          <DetailRow label={t("uploadBarcode")}>
+            {product.barcode ?? t("uploadUnknown")}
+          </DetailRow>
+          <DetailRow label={t("uploadBatch")}>
+            {product.batch ?? t("uploadUnknown")}
+          </DetailRow>
+          <DetailRow label={t("uploadExpiry")}>
+            {product.expiryDate ?? t("uploadUnknown")}
+          </DetailRow>
+          <p className="fine-print">{t("uploadPackageNotStock")}</p>
           <p className="fine-print">{t("scanScope")}</p>
           <DetailRow label={t("priceLabel")}>
             {product.unitPrice == null
@@ -1541,15 +1647,31 @@ export default function App() {
             .filter((b) => b.productId === id)
             .map((b) => (
               <DetailRow key={b.id} label={t("stock")}>
-                {resource(`${b.name} · ${kg(b.quantity)}`, `inventory/${b.id}`)}
+                {resource(
+                  `${b.name} · ${formatQuantity(b.quantity, b.unit)}`,
+                  `inventory/${b.id}`,
+                )}
               </DetailRow>
             ))}
           {!state.stocks.some((balance) => balance.productId === id) && (
             <p className="fine-print">{t("scanNoStockRecord")}</p>
           )}
-          <SourceCards
-            sections={documentSections.filter((s) => s.productId === id)}
-          />
+          <SourceCards sections={productSections(rawState, id)} />
+          {rawState.documentSources
+            .filter(
+              (d) =>
+                d.productId === id && d.uploaded && !d.uploaded.sections.length,
+            )
+            .map((d) => (
+              <div key={d.id}>
+                <p>{t("uploadNoSourceText")}</p>
+                <OriginalDocument
+                  fileId={d.uploaded!.fileId}
+                  name={d.uploaded!.fileName}
+                  mimeType={d.uploaded!.mimeType}
+                />
+              </div>
+            ))}
           <button className="button light" onClick={() => setModal("docs")}>
             {t("demoDocumentCatalog")}
           </button>
@@ -2530,11 +2652,18 @@ function PlanForm({
             onChange={(event) => change("stockId", event.target.value)}
           >
             <option value="">{t("chooseMaterial")}</option>
-            {state.stocks.map((stock) => (
-              <option key={stock.id} value={stock.id}>
-                {stock.name}
-              </option>
-            ))}
+            {state.stocks
+              .filter(
+                (stock) =>
+                  stock.unit === "kg" &&
+                  state.domain.products.find((p) => p.id === stock.productId)
+                    ?.kind === "fertilizer",
+              )
+              .map((stock) => (
+                <option key={stock.id} value={stock.id}>
+                  {stock.name}
+                </option>
+              ))}
           </select>
         </label>
         <label>
