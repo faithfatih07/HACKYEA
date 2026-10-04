@@ -1,6 +1,7 @@
 import { domainMessage } from "../i18n/messages";
 import { createDemoState } from "./demo";
 import { isLegacyFarmState } from "./legacy";
+import { migrateDemoEnglish } from "./englishDemoMigration";
 import { migrateLegacyState } from "./migration";
 import { isFarmState } from "./validation";
 import type { FarmState } from "./types";
@@ -20,14 +21,15 @@ export function loadFarm(storage: StoragePort): StoredFarm {
     if (raw !== null) {
       const parsed: unknown = JSON.parse(raw);
       if (!isFarmState(parsed)) throw new Error("Invalid saved data");
-      return { state: parsed, error: null, migrated: false };
+      const english = migrateDemoEnglish(parsed);
+      return { state: english.state, error: null, migrated: english.changed };
     }
     const legacy = storage.getItem(LEGACY_STORAGE_KEY);
     if (legacy === null)
       return { state: createDemoState(), error: null, migrated: false };
     const parsed: unknown = JSON.parse(legacy);
     if (!isLegacyFarmState(parsed)) throw new Error("Invalid legacy data");
-    const state = migrateLegacyState(parsed);
+    const state = migrateDemoEnglish(migrateLegacyState(parsed)).state;
     if (!isFarmState(state)) throw new Error("Invalid migrated data");
     // Reading is side-effect free. The repository persists migration under its write lock.
     // Never remove or overwrite the original v1 key; it is a recovery copy.

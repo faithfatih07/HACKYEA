@@ -1,13 +1,13 @@
 import { describe, expect, it } from "vitest";
 import en from "./en.json";
-import tr from "./tr.json";
 import {
   dataText,
   domainMessage,
   localizeFarm,
   localizeMessage,
+  translate,
 } from "./messages";
-import { selectFarmView } from "../domain/selectors";
+import { language, useLanguage } from "./index";
 import { createDemoState } from "../domain/demo";
 import {
   confirmOperation,
@@ -17,31 +17,31 @@ import {
 } from "../domain/operations";
 import { demoInterpreter } from "../interpreter/demoInterpreter";
 
-describe("language support preserves farm records", () => {
-  it("has matching keys and interpolation fields in both languages", () => {
-    expect(Object.keys(tr).sort()).toEqual(Object.keys(en).sort());
-    for (const key of Object.keys(en) as (keyof typeof en)[]) {
-      expect(tr[key].match(/\{\w+\}/g)?.sort() ?? []).toEqual(
-        en[key].match(/\{\w+\}/g)?.sort() ?? [],
-      );
-    }
+describe("English-only interface preserves farm records", () => {
+  it("always selects English and keeps interpolation fields working", () => {
+    expect(language()).toBe("en");
+    expect(useLanguage()).toBe("en");
+    for (const key of Object.keys(en) as (keyof typeof en)[])
+      expect(translate(key, {}, "tr")).toBe(en[key]);
+    expect(domainMessage("errorAvailable", { quantity: 800.5 })).toContain(
+      "800.5 kg",
+    );
   });
-  it("translates sample records without changing stored data or identifiers", () => {
+  it("shows English demo names without changing stored identifiers or data", () => {
     const state = createDemoState();
     const before = structuredClone(state);
     const display = localizeFarm(state, "tr");
-    expect(display.jobs[0].title).toBe("Kuzey gübreleme");
-    expect(display.fields[0].crop).toBe("Buğday");
-    expect(display.machines[0].name).toBe("Kırmızı traktör");
-    expect(display.warehouses[0].name).toBe("Ana depo");
-    expect(display.people[1].role).toBe("Çiftlik çalışanı");
-    expect(display.stocks).toEqual(selectFarmView(state).stocks);
+    expect(display.jobs[0].title).toBe("Fertilize North");
+    expect(display.fields[0].crop).toBe("Wheat");
+    expect(display.machines[0].name).toBe("Red tractor");
+    expect(display.warehouses[0].name).toBe("Main warehouse");
+    expect(display.people[1].role).toBe("Farm worker");
     expect(display.jobs.map((job) => job.id)).toEqual(
       state.tasks.map((job) => job.id),
     );
     expect(state).toEqual(before);
   });
-  it("preserves user job names, including names similar to demo jobs", () => {
+  it("preserves user job names and free text, even when similar to seed names", () => {
     const state = createPlannedJob(
       createDemoState(),
       {
@@ -63,7 +63,7 @@ describe("language support preserves farm records", () => {
     expect(display.jobs[0].title).toBe("Benim yeni iş adım");
     expect(dataText("Custom crop", "tr")).toBe("Custom crop");
   });
-  it("preserves preview, confirmation and duplicate protection in Turkish", () => {
+  it("preserves preview, confirmation and duplicate protection in English", () => {
     const state = createDemoState();
     const draft = {
       id: "locale-demo",
@@ -72,39 +72,41 @@ describe("language support preserves farm records", () => {
       stockId: "fertilizer-a",
       quantity: "600",
     };
-    expect(previewOperation(localizeFarm(state, "tr"), draft).after).toBe(200);
+    expect(previewOperation(localizeFarm(state), draft).after).toBe(200);
     const next = confirmOperation(state, draft, state.revision);
     expect(next.inventoryBalances[0].quantity).toBe(200);
-    expect(getShortages(localizeFarm(next, "tr"))[0].missing).toBe(100);
+    expect(getShortages(localizeFarm(next))[0].missing).toBe(100);
     expect(
       confirmOperation(next, draft, next.revision).inventoryTransactions,
     ).toHaveLength(1);
-    expect(next.tasks[0].title).toBe("Fertilize Kuzey");
+    expect(next.tasks[0].title).toBe("Fertilize North");
   });
-  it("resolves Turkish and English interpreter input to the same raw records", async () => {
+  it("still resolves historical input to the same IDs as English input", async () => {
     const state = createDemoState();
-    const turkish = await demoInterpreter.interpret(tr.exampleFull, state);
+    const historical = await demoInterpreter.interpret(
+      "Kuzey tarlasında 600 kg gübre kullandım",
+      state,
+    );
     const english = await demoInterpreter.interpret(en.exampleFull, state);
-    expect(turkish).toEqual(english);
-    expect(turkish.kind).toBe("draft");
+    expect(historical).toEqual(english);
+    expect(english.kind).toBe("draft");
   });
-  it("translates joined validation errors and physical stock amounts", () => {
+  it("keeps validation errors and physical amounts English despite an old locale", () => {
     const error =
       domainMessage("errorChooseField") +
       " " +
       domainMessage("errorChooseMaterial");
     expect(localizeMessage(error, "tr")).toBe(
-      "Bir tarla seçin. Bir malzeme seçin.",
+      en.errorChooseField + " " + en.errorChooseMaterial,
     );
     expect(
       localizeMessage(
         domainMessage("errorAvailable", { quantity: 800.5 }),
         "tr",
       ),
-    ).toContain("800,5 kg");
+    ).toContain("800.5 kg");
     expect(localizeMessage(domainMessage("errorStale"), "tr")).toBe(
-      tr.errorStale,
+      en.errorStale,
     );
-    expect(localizeMessage(tr.jobPlanned, "en")).toBe(en.jobPlanned);
   });
 });

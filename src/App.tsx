@@ -1,7 +1,6 @@
 import {
   t,
   useLanguage,
-  setLanguage,
   localizeFarm,
   localizeMessage,
   formatKg,
@@ -263,6 +262,12 @@ export default function App() {
         setInterpreterError(result.message);
         return;
       }
+      if (result.bagConversion || result.questions?.length)
+        setAIMetadata({
+          summary: t("localBagSummary"),
+          questions: result.questions ?? [],
+          bagConversion: result.bagConversion ?? null,
+        });
       const singleField =
         result.fieldIds.length === 1 ? result.fieldIds[0] : "";
       // Missing or ambiguous fields always require a user choice, even if only one job remains.
@@ -1648,30 +1653,6 @@ export default function App() {
             </strong>
           </div>
           <div className="topbar-right">
-            <div
-              className="language-switch"
-              role="group"
-              aria-label={t("languageSelector")}
-            >
-              <button
-                className={language === "tr" ? "selected" : ""}
-                aria-label="Türkçe"
-                aria-pressed={language === "tr"}
-                lang="tr"
-                onClick={() => setLanguage("tr")}
-              >
-                TR
-              </button>
-              <button
-                className={language === "en" ? "selected" : ""}
-                aria-label="English"
-                aria-pressed={language === "en"}
-                lang="en"
-                onClick={() => setLanguage("en")}
-              >
-                EN
-              </button>
-            </div>
             <span className="demo-badge">
               <span />
               {t("demoSampleData")}
@@ -1781,6 +1762,7 @@ export default function App() {
           {aiMetadata && (
             <AIReviewNote
               metadata={aiMetadata}
+              provider={aiProvider}
               acknowledged={aiAcknowledged}
               onAcknowledge={setAIAcknowledged}
             />
@@ -1828,6 +1810,7 @@ export default function App() {
           {aiMetadata && (
             <AIReviewNote
               metadata={aiMetadata}
+              provider={aiProvider}
               acknowledged={aiAcknowledged}
               onAcknowledge={setAIAcknowledged}
               proposedQuantity={draft.quantity}

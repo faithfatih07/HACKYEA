@@ -16,7 +16,7 @@ export const documentProducts: Product[] = [
   {
     id: "product-fertilizer-a",
     farmId: "murat-farm",
-    name: "Demo Gübre A",
+    name: "Demo Fertilizer A",
     kind: "fertilizer",
     unit: "kg",
     documentSourceIds: ["doc-fertilizer-a"],
@@ -24,7 +24,7 @@ export const documentProducts: Product[] = [
   {
     id: "product-pesticide-b",
     farmId: "murat-farm",
-    name: "Demo İlaç B",
+    name: "Demo Pesticide B",
     kind: "pesticide",
     unit: "l",
     documentSourceIds: ["doc-pesticide-b"],
@@ -34,57 +34,57 @@ export const documentSections: DocumentSection[] = [
   {
     sourceId: "doc-fertilizer-a",
     productId: "product-fertilizer-a",
-    title: "Demo Gübre A Ürün Kimlik Kartı",
+    title: "Demo Fertilizer A Product Identity Card",
     sectionId: "identity",
-    sectionTitle: "Ürün kimliği",
-    text: "Hayalî demo üründür. Gerçek ürünün bileşimi kayıtlı değildir.",
+    sectionTitle: "Product identity",
+    text: "This is a fictional demo product. Its actual composition is not recorded.",
     documentType: "productIdentity",
     isSyntheticDemo: true,
   },
   {
     sourceId: "doc-fertilizer-a",
     productId: "product-fertilizer-a",
-    title: "Demo Gübre A Ürün Kimlik Kartı",
+    title: "Demo Fertilizer A Product Identity Card",
     sectionId: "packaging",
-    sectionTitle: "Ambalaj",
-    text: "Ambalaj büyüklüğü: bir çuval 50 kg'dır.",
+    sectionTitle: "Packaging",
+    text: "Packaging size: one bag contains 50 kg.",
     documentType: "productIdentity",
     isSyntheticDemo: true,
   },
   {
     sourceId: "doc-fertilizer-a",
     productId: "product-fertilizer-a",
-    title: "Demo Gübre A Ürün Kimlik Kartı",
+    title: "Demo Fertilizer A Product Identity Card",
     sectionId: "unrecorded",
-    sectionTitle: "Kayıtlı olmayan bilgiler",
-    text: "Uygulama dozu kayıtlı değildir. Uygulama yöntemi kayıtlı değildir. Ürünün gerçek bileşimi kayıtlı değildir.",
+    sectionTitle: "Unrecorded information",
+    text: "The application dose is not recorded. The application method is not recorded. The actual product composition is not recorded.",
     documentType: "productIdentity",
     isSyntheticDemo: true,
   },
   {
     sourceId: "doc-pesticide-b",
     productId: "product-pesticide-b",
-    title: "Demo İlaç B Sentetik Test Etiketi",
+    title: "Demo Pesticide B Synthetic Test Label",
     sectionId: "identity",
-    sectionTitle: "Sentetik test belgesi",
-    text: "Gerçek ürün etiketi değildir, yalnızca hackathon testi içindir. Hayalî Demo İlaç B ürünü içindir. Aktif madde, ruhsat, doz, karışım, KKD ve yeniden giriş süresi kayıtlı değildir.",
+    sectionTitle: "Synthetic test document",
+    text: "This is not a real product label; it is only for hackathon testing of fictional Demo Pesticide B. Active ingredient, registration, dose, mixing, PPE and re-entry time are not recorded.",
     documentType: "syntheticTestLabel",
     isSyntheticDemo: true,
   },
   {
     sourceId: "doc-pesticide-b",
     productId: "product-pesticide-b",
-    title: "Demo İlaç B Sentetik Test Etiketi",
+    title: "Demo Pesticide B Synthetic Test Label",
     sectionId: "harvest-wait",
-    sectionTitle: "Sentetik bekleme süresi",
-    text: "Yalnızca hayalî Demo İlaç B için sentetik test bilgisi: hasat öncesi bekleme süresi 10 × 24 saattir. Uygulama tarihi ve saati olmadan hasat zamanı hesaplanamaz. Gerçek ürün tavsiyesi değildir.",
+    sectionTitle: "Synthetic waiting period",
+    text: "Synthetic test information for fictional Demo Pesticide B only: the pre-harvest waiting period is 10 × 24 hours. Harvest time cannot be calculated without an application date and time. This is not advice for real products.",
     documentType: "syntheticTestLabel",
     isSyntheticDemo: true,
   },
 ];
 export const normalize = (value: string) =>
   value
-    .toLocaleLowerCase("tr-TR")
+    .toLocaleLowerCase("en-GB")
     .replaceAll("ı", "i")
     .normalize("NFD")
     .replace(/[\u0300-\u036f]/g, "");

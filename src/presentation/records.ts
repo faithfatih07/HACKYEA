@@ -84,7 +84,7 @@ export function recordInfo(state: FarmView, ref: EntityReference) {
 export function impactText(
   state: FarmView,
   impact: Impact,
-  language: "tr" | "en",
+  _language: "tr" | "en",
 ) {
   const values: Record<string, unknown> = {
     ...impact.values,
@@ -97,10 +97,9 @@ export function impactText(
   };
   for (const [key, value] of Object.entries(values))
     if (typeof value === "number")
-      values[key] = new Intl.NumberFormat(
-        language === "tr" ? "tr-TR" : "en-GB",
-        { maximumFractionDigits: 3 },
-      ).format(value);
+      values[key] = new Intl.NumberFormat("en-GB", {
+        maximumFractionDigits: 3,
+      }).format(value);
   for (const [key, kind] of [
     ["task", "task"],
     ["parent", "task"],

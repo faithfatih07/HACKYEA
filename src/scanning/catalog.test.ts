@@ -47,7 +47,7 @@ describe("read-only product code matching", () => {
     for (const code of [
       "https://example.com/product-fertilizer-a",
       "2000000000016",
-      "Demo Gübre A",
+      "Demo Fertilizer A",
       "NOT-REGISTERED",
     ]) {
       expect(matchProductCode(code, createDemoState().products)).toEqual({
@@ -63,9 +63,9 @@ describe("read-only product code matching", () => {
   it("allows explicit manual selection only from catalog IDs", () => {
     const products = createDemoState().products;
     expect(selectCatalogProduct("product-pesticide-b", products)?.name).toBe(
-      "Demo İlaç B",
+      "Demo Pesticide B",
     );
-    expect(selectCatalogProduct("Demo Gübre A", products)).toBeNull();
+    expect(selectCatalogProduct("Demo Fertilizer A", products)).toBeNull();
     expect(selectCatalogProduct("made-up-product", products)).toBeNull();
     expect(new Set(productCatalog(products).map((p) => p.id)).size).toBe(
       productCatalog(products).length,
@@ -95,7 +95,7 @@ describe("read-only product code matching", () => {
     );
     if (match.status !== "found") throw new Error("Expected fixture product");
     const id = match.product.id;
-    const question = "Bir çuval kaç kilo?";
+    const question = "How many kilograms are in one bag?";
     const answer = groundDocumentAnswer(
       question,
       localDocumentInterpretation(question, id),
@@ -114,7 +114,8 @@ describe("read-only product code matching", () => {
     expect(
       documentSections.find((s) => s.sectionId === "packaging")?.text,
     ).toContain("50 kg");
-    const dose = "Bu gübreyi dekara kaç kilo uygulamalıyım?";
+    const dose =
+      "How many kilograms of this fertilizer should I apply per decare?";
     expect(
       groundDocumentAnswer(
         dose,

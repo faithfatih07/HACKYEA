@@ -257,25 +257,7 @@ button:disabled {
 .topbar-right {
   gap: 18px;
 }
-.language-switch {
-  padding: 3px;
-  gap: 3px;
-  border-radius: 11px;
-  border-color: #c9cfba;
-  background: #eceee3;
-}
-.language-switch button {
-  min-height: 48px;
-  min-width: 48px;
-  font-size: 14px;
-  border-radius: 7px;
-  color: #4f5b40;
-}
-.language-switch button.selected {
-  background: var(--green);
-  color: #fffdf7;
-  box-shadow: 0 1px 2px #28352130;
-}
+
 .demo-badge {
   font-size: 12px;
   letter-spacing: 0.5px;
@@ -1386,9 +1368,7 @@ main {
   .topbar-right {
     display: contents;
   }
-  .language-switch {
-    margin-left: auto;
-  }
+
   .demo-badge {
     flex-basis: 100%;
     background: none;

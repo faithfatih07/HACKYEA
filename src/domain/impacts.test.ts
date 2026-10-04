@@ -381,7 +381,7 @@ describe("general decision engine", () => {
       expect.objectContaining({
         kind: "cost",
         values: {
-          offer: "Demo Hizmet A",
+          offer: "Demo Service A",
           offerId: "service-a",
           amount: 2000,
           currency: "TRY",

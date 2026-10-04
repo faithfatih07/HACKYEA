@@ -7,14 +7,14 @@ import { isDocumentQuestion } from "./documents";
 export async function requestInterpretation(
   text: string,
   state: FarmState,
-  language: Language,
+  _language: Language,
   options?: { productId: string | null; applicationDateTime?: string | null },
 ): Promise<APIResult> {
   try {
     const documentOnly = Boolean(options) || isDocumentQuestion(text);
     const body: AIRequest = {
       text,
-      language,
+      language: "en",
       mode: documentOnly ? "DOCUMENT_ANSWER" : "AUTO",
       productId: options?.productId ?? null,
       applicationDateTime: options?.applicationDateTime ?? null,

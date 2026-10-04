@@ -34,10 +34,10 @@ const operation = (): OperationInterpretation => ({
   missingFields: [],
   ambiguities: [],
   confidence: 0.95,
-  userFacingSummary: "Kuzey tarlasında 600 kg tüketim taslağı.",
+  userFacingSummary: "A 600 kg consumption draft for the North Field.",
 });
 const request = (): AIRequest => ({
-  text: "Kuzey tarlasında 600 kilo gübre kullandık.",
+  text: "I used 600 kilograms of fertilizer in the North Field.",
   language: "tr",
   mode: "AUTO",
   productId: null,
@@ -68,6 +68,14 @@ describe("AI trust boundary and existing confirmation pipeline (offline mocks)",
     );
   });
   afterEach(() => vi.unstubAllGlobals());
+  it("overrides historical locale preferences and sends English catalog names to the provider", async () => {
+    const provider = mock(operation());
+    await interpretRequest({ ...request(), language: "tr" }, provider);
+    const input = vi.mocked(provider.generate).mock.calls[0][0];
+    expect(input.request.language).toBe("en");
+    expect(input.request.context?.fields[0].name).toBe("North");
+    expect(input.request.context?.products[0].name).toBe("Demo Fertilizer A");
+  });
   it("accepts a valid provider JSON and adapts to the existing ActionDraft", async () => {
     const result = await interpretRequest(
       request(),
@@ -210,7 +218,7 @@ describe("AI trust boundary and existing confirmation pipeline (offline mocks)",
       createDemoState(),
       value,
       [],
-      "Ali kuzeyde 12 çuval gübre kullandı",
+      "Ali used 12 bags of fertilizer in the North Field",
     );
     expect(
       adapted.draft.kind === "recordConsumption" &&
@@ -225,7 +233,7 @@ describe("AI trust boundary and existing confirmation pipeline (offline mocks)",
       createDemoState(),
       schedule,
       undefined,
-      "Kuzey gübrelemeyi pazartesi sabahına taşı",
+      "Move North fertilizing to Monday morning",
     );
     expect(
       result.draft.kind === "rescheduleTask" && result.draft.schedule.startTime,
@@ -237,7 +245,7 @@ describe("AI trust boundary and existing confirmation pipeline (offline mocks)",
       createDemoState(),
       operation(),
       undefined,
-      "Kuzey tarlasında gübre kullandık",
+      "I used fertilizer in the North Field",
     );
     expect(
       result.draft.kind === "recordConsumption" && result.draft.actualQuantity,
@@ -249,7 +257,7 @@ describe("AI trust boundary and existing confirmation pipeline (offline mocks)",
     value.intentType = "rescheduleTask";
     value.targetEntityIds.taskId = null;
     value.extractedFields.date = "2026-10-05";
-    value.ambiguities = ["Hangi Kuzey işi?"];
+    value.ambiguities = ["Which North task?"];
     value.missingFields = ["startTime", "endTime"];
     const { draft } = adaptActionDraft(createDemoState(), value);
     expect(draft.kind === "rescheduleTask" && draft.taskId).toBeNull();
@@ -276,7 +284,7 @@ describe("AI trust boundary and existing confirmation pipeline (offline mocks)",
     expect(
       (
         await demoInterpreter.interpret(
-          "Kuzey tarlasında 600 kg gübre kullandım",
+          "I used 600 kg fertilizer in the North Field",
           createDemoState(),
         )
       ).kind,
@@ -321,7 +329,7 @@ describe("AI trust boundary and existing confirmation pipeline (offline mocks)",
     }));
     vi.stubGlobal("fetch", localFetch);
     await requestInterpretation(
-      "Demo Gübre A bir çuval kaç kilo?",
+      "How many kilograms are in one bag of Demo Fertilizer A?",
       createDemoState(),
       "tr",
     );
@@ -347,7 +355,7 @@ describe("small source-grounded document retrieval", () => {
   );
   afterEach(() => vi.unstubAllGlobals());
   it("bag answer cites the actual fertilizer packaging section", async () => {
-    const question = "Demo Gübre A’dan bir çuval kaç kilo?";
+    const question = "How many kilograms are in one bag of Demo Fertilizer A?";
     const interpretation = localDocumentInterpretation(question);
     const response = await interpretRequest(
       docRequest(question),
@@ -369,7 +377,8 @@ describe("small source-grounded document retrieval", () => {
     });
   });
   it("does not invent dosage from a 600 kg farm plan", async () => {
-    const question = "Bu gübreyi dekara kaç kilo uygulamalıyım?";
+    const question =
+      "How many kilograms of this fertilizer should I apply per decare?";
     const result = localDocumentInterpretation(question);
     expect(result.answerType).toBe("unavailable");
     expect(
@@ -386,7 +395,7 @@ describe("small source-grounded document retrieval", () => {
     ).toBe("demo");
   });
   it("rejects nonexistent or unrelated source IDs and injection output", async () => {
-    const q = "Demo Gübre A çuval?";
+    const q = "Demo Fertilizer A bag?";
     const value = localDocumentInterpretation(q);
     value.sourceRefs = [{ sourceId: "invented", sectionId: "packaging" }];
     expect(() => groundDocumentAnswer(q, value, null, null, "tr")).toThrow();
@@ -400,7 +409,7 @@ describe("small source-grounded document retrieval", () => {
     ).toBe("demo");
   });
   it("asks for application datetime and computes exactly 10×24 hours only for synthetic B", () => {
-    const q = "Demo İlaç B uygulamasından sonra ne zaman hasat edebilirim?";
+    const q = "When can I harvest after applying Demo Pesticide B?";
     const value = localDocumentInterpretation(q);
     expect(
       groundDocumentAnswer(q, value, null, null, "en").needsApplicationDate,
@@ -423,7 +432,7 @@ describe("small source-grounded document retrieval", () => {
     ).toBe(true);
   });
   it("never applies the fictional waiting period to a real or unspecified pesticide", () => {
-    const q = "Gerçek ilacı kullandım, ne zaman hasat edebilirim?";
+    const q = "I used a real pesticide; when can I harvest?";
     expect(retrieveSections(q)).toHaveLength(0);
     expect(
       groundDocumentAnswer(q, localDocumentInterpretation(q), null, null, "tr")
@@ -449,6 +458,6 @@ describe("small source-grounded document retrieval", () => {
       documentSections.find(
         (s) => s.sourceId === "doc-pesticide-b" && s.sectionId === "identity",
       )?.text,
-    ).toContain("Gerçek ürün etiketi değildir");
+    ).toContain("not a real product label");
   });
 });

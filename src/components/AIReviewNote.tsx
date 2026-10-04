@@ -17,15 +17,19 @@ export function AIReviewNote({
   acknowledged,
   onAcknowledge,
   proposedQuantity,
+  provider = "gemini",
 }: {
   metadata: AIReviewMetadata;
   acknowledged: boolean;
   onAcknowledge: (value: boolean) => void;
   proposedQuantity?: string;
+  provider?: "demo" | "gemini";
 }) {
   return (
     <section className="ai-review-note">
-      <span className="pill">{t("aiInterpreted")}</span>
+      <span className="pill">
+        {t(provider === "gemini" ? "aiInterpreted" : "interpreterLabel")}
+      </span>
       <p>{metadata.summary}</p>
       {metadata.bagConversion && (
         <>

@@ -10,7 +10,7 @@ export async function interpretRequest(
   provider: AIProvider | null,
   today = new Date().toLocaleDateString("en-CA"),
 ): Promise<APIResult> {
-  const request = requestSchema.parse(input);
+  const request = { ...requestSchema.parse(input), language: "en" as const };
   if (!provider) return { provider: "demo", reason: "no_key" };
   const sections = retrieveSections(request.text, request.productId);
   let raw: unknown;

@@ -26,7 +26,7 @@ describe("first farm scenario", () => {
     const before = JSON.stringify(state);
     expect(
       await demoInterpreter.interpret(
-        "Kuzey tarlasında 600 kg gübre kullandım",
+        "I used 600 kg fertilizer in the North Field",
         state,
       ),
     ).toEqual({
@@ -38,7 +38,7 @@ describe("first farm scenario", () => {
     });
     expect(JSON.stringify(state)).toBe(before);
   });
-  it("previews 800 → 200, and a 100 kg shortfall for Doğu, with no mutations", () => {
+  it("previews 800 → 200, and a 100 kg shortfall for East, with no mutations", () => {
     const state = createDemoState();
     const preview = previewOperation(state, draft);
     expect(preview.valid).toBe(true);
@@ -152,7 +152,7 @@ describe("validation and planning", () => {
     const next = createPlannedJob(
       initial,
       {
-        title: "Fertilize Güney",
+        title: "Fertilize South",
         fieldId: "south",
         personId: "ali",
         machineIds: ["tractor", "spreader"],
@@ -219,7 +219,7 @@ describe("honest local interpreter", () => {
   it("accepts the documented English example", async () => {
     expect(
       await demoInterpreter.interpret(
-        "I used 600 kg fertilizer in Kuzey",
+        "I used 600 kg fertilizer in the North Field",
         createDemoState(),
       ),
     ).toMatchObject({
@@ -232,7 +232,7 @@ describe("honest local interpreter", () => {
   it("leaves missing and ambiguous details for the user to choose", async () => {
     expect(
       await demoInterpreter.interpret(
-        "600 kg gübre kullandım",
+        "I used 600 kg fertilizer",
         createDemoState(),
       ),
     ).toMatchObject({
@@ -242,23 +242,23 @@ describe("honest local interpreter", () => {
     });
     expect(
       await demoInterpreter.interpret(
-        "Kuzey tarlasında gübre kullandım",
+        "I used fertilizer in the North Field",
         createDemoState(),
       ),
     ).toMatchObject({ kind: "draft", quantity: "" });
     expect(
       await demoInterpreter.interpret(
-        "Kuzey ve Doğu tarlalarında 600 kg gübre kullandım",
+        "I used 600 kg fertilizer in North and East",
         createDemoState(),
       ),
     ).toMatchObject({ kind: "draft", fieldIds: ["north", "east"] });
   });
   it.each([
-    "Kuzey tarlasında 600 kg gübre kullanmadım",
+    "I did not use 600 kg fertilizer in the North Field",
     "How much fertilizer should I apply?",
     "Diagnose my wheat",
-    "Kuzey tarlasında 600 kg gerçek ürün kullandım",
-    "Kuzey tarlasında 600 kg gübre kullandım ve Doğu için 300 kg sipariş ver",
+    "I used 600 kg of a real product in the North Field",
+    "I used 600 kg fertilizer in the North Field and order 300 kg for East",
     "Yesterday I used something",
     "",
   ])("does not invent a result for %s", async (text) => {
@@ -271,7 +271,7 @@ describe("honest local interpreter", () => {
     state.tasks.push({ ...state.tasks[0], id: "north-second" });
     expect(
       await demoInterpreter.interpret(
-        "Kuzey tarlasında 600 kg gübre kullandım",
+        "I used 600 kg fertilizer in the North Field",
         state,
       ),
     ).toMatchObject({

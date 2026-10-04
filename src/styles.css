@@ -133,26 +133,7 @@ h3 {
 .farm-heading .button {
   margin-left: auto;
 }
-.language-switch {
-  display: flex;
-  border: 1px solid #d5d9c8;
-  background: #f1f1e8;
-  border-radius: 7px;
-  padding: 2px;
-  gap: 2px;
-}
-.language-switch button {
-  min-width: 36px;
-  min-height: 32px;
-  border-radius: 5px;
-  font-size: 11px;
-  font-weight: 750;
-  color: #71806a;
-}
-.language-switch button.selected {
-  background: #3f6841;
-  color: #fffdf0;
-}
+
 p {
   color: #6c7467;
 }

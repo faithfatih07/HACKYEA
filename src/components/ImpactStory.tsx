@@ -116,7 +116,7 @@ export function ImpactStory({
   const source = recordInfo(state, scene.source);
   const amount = (value: unknown, unit: string) =>
     typeof value === "number"
-      ? `${new Intl.NumberFormat(language === "tr" ? "tr-TR" : "en-GB", { maximumFractionDigits: 3 }).format(value)} ${unit}`
+      ? `${new Intl.NumberFormat("en-GB", { maximumFractionDigits: 3 }).format(value)} ${unit}`
       : t("unknownStatus");
   function node(ref: EntityReference, compact = false) {
     const info = recordInfo(display, ref);

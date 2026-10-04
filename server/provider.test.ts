@@ -13,7 +13,7 @@ import { retrieveSections } from "../src/ai/documents";
 describe("official SDK adapter without network", () => {
   it("uses the required model, JSON schema, system instructions and only retrieved sections", async () => {
     const provider = new GeminiProvider("mock-server-secret");
-    const text = "Demo Gübre A’dan bir çuval kaç kilo?";
+    const text = "How many kilograms are in one bag of Demo Fertilizer A?";
     const request = {
       text,
       language: "tr" as const,
@@ -39,5 +39,9 @@ describe("official SDK adapter without network", () => {
     expect(JSON.stringify(sent[0])).not.toContain("mock-server-secret");
     expect(JSON.stringify(sent[0])).toContain("UNTRUSTED DATA");
     expect(JSON.stringify(sent[0])).toContain("packaging");
+    expect(JSON.stringify(sent[0])).toContain(
+      "Always write summaries and questions in English",
+    );
+    expect(JSON.stringify(sent[0])).toContain("Demo Fertilizer A");
   });
 });

@@ -8,7 +8,7 @@ export function createLegacyDemoState(): LegacyFarmState {
     fields: [
       {
         id: "north",
-        name: "Kuzey",
+        name: "North",
         area: 30,
         crop: domainMessage("cropWheat"),
         stage: "Planned",
@@ -16,7 +16,7 @@ export function createLegacyDemoState(): LegacyFarmState {
       },
       {
         id: "south",
-        name: "Güney",
+        name: "South",
         area: 35,
         crop: domainMessage("cropCorn"),
         stage: "Growing",
@@ -24,7 +24,7 @@ export function createLegacyDemoState(): LegacyFarmState {
       },
       {
         id: "east",
-        name: "Doğu",
+        name: "East",
         area: 25,
         crop: domainMessage("cropBarley"),
         stage: "Planned",
@@ -97,7 +97,7 @@ export function createLegacyDemoState(): LegacyFarmState {
     stocks: [
       {
         id: "fertilizer-a",
-        name: "Demo Gübre A",
+        name: "Demo Fertilizer A",
         warehouseId: "main",
         quantity: 800,
         unit: "kg",

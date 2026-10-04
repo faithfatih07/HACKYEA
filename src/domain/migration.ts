@@ -38,7 +38,7 @@ export function migrateLegacyState(old: LegacyFarmState): FarmState {
     revision: old.revision,
     farm: {
       id: farmId,
-      name: "Murat’ın Çiftliği",
+      name: "Murat’s Farm",
       ownerId: "murat",
       demoUserId: "murat",
     },

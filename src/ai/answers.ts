@@ -40,7 +40,7 @@ export function groundDocumentAnswer(
   result: DocumentInterpretation,
   productId: string | null,
   applicationDateTime: string | null,
-  language: Language,
+  _language: Language,
 ): GroundedAnswer {
   const value = documentAnswerSchema.parse(result);
   const retrieved = retrieveSections(question, productId);
@@ -96,7 +96,7 @@ export function groundDocumentAnswer(
       ...base,
       messageKey: "answerHarvest",
       values: {
-        date: earliest.toLocaleString(language === "tr" ? "tr-TR" : "en-GB"),
+        date: earliest.toLocaleString("en-GB"),
       },
     };
   }

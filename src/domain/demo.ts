@@ -9,7 +9,7 @@ export function createDemoState(): FarmState {
     revision: 0,
     farm: {
       id: farmId,
-      name: "Murat’ın Çiftliği",
+      name: "Murat’s Farm",
       ownerId: "murat",
       demoUserId: "murat",
     },
@@ -17,7 +17,7 @@ export function createDemoState(): FarmState {
       {
         id: "north",
         farmId,
-        name: "Kuzey",
+        name: "North",
         area: 30,
         crop: domainMessage("cropWheat"),
         stage: "Planned",
@@ -26,7 +26,7 @@ export function createDemoState(): FarmState {
       {
         id: "south",
         farmId,
-        name: "Güney",
+        name: "South",
         area: 35,
         crop: domainMessage("cropCorn"),
         stage: "Growing",
@@ -35,7 +35,7 @@ export function createDemoState(): FarmState {
       {
         id: "east",
         farmId,
-        name: "Doğu",
+        name: "East",
         area: 25,
         crop: domainMessage("cropBarley"),
         stage: "Planned",
@@ -91,7 +91,7 @@ export function createDemoState(): FarmState {
       {
         id: "product-fertilizer-a",
         farmId,
-        name: "Demo Gübre A",
+        name: "Demo Fertilizer A",
         kind: "fertilizer",
         unit: "kg",
         documentSourceIds: [],
@@ -207,7 +207,7 @@ export function createDemoState(): FarmState {
         id: "service-a",
         farmId,
         taskId: "north-fertilize",
-        name: "Demo Hizmet A",
+        name: "Demo Service A",
         price: 1800,
         transportCost: 200,
         durationHours: 2,
@@ -217,7 +217,7 @@ export function createDemoState(): FarmState {
         id: "service-b",
         farmId,
         taskId: "north-fertilize",
-        name: "Demo Hizmet B",
+        name: "Demo Service B",
         price: 1500,
         transportCost: null,
         durationHours: null,
