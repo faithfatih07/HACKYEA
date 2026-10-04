@@ -43,14 +43,22 @@ import { Dialog } from "./components/Dialog";
 import { useFarm } from "./hooks/useFarm";
 import { createId } from "./domain/id";
 import {
-  completeSowingJob,
-  confirmOperation,
-  createPlannedJob,
+  consumptionAction,
+  planAction,
+  sowingAction,
   getShortages,
   previewOperation,
 } from "./domain/operations";
 import { demoInterpreter } from "./interpreter/demoInterpreter";
-import type { FarmState, Job, OperationDraft, PlanDraft } from "./domain/types";
+import type { Impact, OperationDraft, PlanDraft } from "./domain/types";
+import {
+  isTaskBlocked,
+  inventorySummary,
+  hasUnknownPlanning,
+  selectFarmView,
+} from "./domain/selectors";
+import { previewAction } from "./domain/actions";
+import type { FarmView as FarmState, Job } from "./domain/selectors";
 import type { MessageKey } from "./i18n/messages";
 
 const kg = formatKg;
@@ -74,7 +82,12 @@ const getCategories = (): {
 export default function App() {
   const language = useLanguage();
   const categories = getCategories();
-  const { state: rawState, storageError, commit, reset } = useFarm();
+  const {
+    state: rawState,
+    storageError,
+    confirm: confirmDraft,
+    reset,
+  } = useFarm();
   const state = useMemo(
     () => localizeFarm(rawState, language),
     [rawState, language],
@@ -138,7 +151,7 @@ export default function App() {
       jobId: job.id,
       fieldId: job.fieldId,
       stockId: job.stockId ?? "",
-      quantity: String(job.plannedQuantity),
+      quantity: job.plannedQuantity === null ? "" : String(job.plannedQuantity),
     });
     setActionError("");
     setShowDraft(true);
@@ -179,9 +192,13 @@ export default function App() {
     setBusy(true);
     setActionError("");
     try {
-      const next = await commit((latest) =>
-        confirmOperation(latest, draft, state.revision),
-      );
+      const action = consumptionAction(rawState, draft);
+      const committed = await confirmDraft(action, {
+        approved: true,
+        draftId: action.id,
+        expectedRevision: state.revision,
+      });
+      const next = selectFarmView(committed);
       const record = next.consumptions.find(
         (item) => item.operationId === draft.id || item.jobId === draft.jobId,
       );
@@ -192,8 +209,7 @@ export default function App() {
         record
           ? {
               value0: record.quantity,
-              value1: next.stocks.find((item) => item.id === record.stockId)!
-                .quantity,
+              value1: record.after,
             }
           : {},
       );
@@ -218,10 +234,9 @@ export default function App() {
       team: t("3FamiliarFaces"),
     })[category];
   const jobBlocked = (job: Job) =>
-    Boolean(
-      job.dependencyId &&
-      state.jobs.find((item) => item.id === job.dependencyId)?.status !==
-        "completed",
+    isTaskBlocked(
+      rawState,
+      rawState.tasks.find((task) => task.id === job.id)!,
     );
 
   const jobCard = (job: Job, compact = false) => (
@@ -440,6 +455,7 @@ export default function App() {
                           value2: kg(shortage.required),
                         })}
                       </p>
+                      {shortage.isMinimum && <p>{t("unknownPlanning")}</p>}
                       <div className="inline-links">
                         {resource(
                           t("checkInventory"),
@@ -459,8 +475,16 @@ export default function App() {
                 <div className="warning-content">
                   <CheckCircle2 size={25} />
                   <div>
-                    <h3>{t("theStockPlanAddsUp")}</h3>
-                    <p>{t("availableMaterialsCoverTheRemainingPlannedWork")}</p>
+                    <h3>
+                      {hasUnknownPlanning(rawState)
+                        ? t("impactUnknown")
+                        : t("theStockPlanAddsUp")}
+                    </h3>
+                    <p>
+                      {hasUnknownPlanning(rawState)
+                        ? t("unknownPlanning")
+                        : t("availableMaterialsCoverTheRemainingPlannedWork")}
+                    </p>
                   </div>
                 </div>
               )}
@@ -906,11 +930,7 @@ export default function App() {
             <Package size={20} />
           </div>
           {state.stocks.map((stock) => {
-            const demand = state.jobs
-              .filter(
-                (job) => job.status === "planned" && job.stockId === stock.id,
-              )
-              .reduce((total, job) => total + job.plannedQuantity, 0);
+            const { missing } = inventorySummary(rawState, stock.id);
             return (
               <button
                 className="inventory-row"
@@ -930,13 +950,15 @@ export default function App() {
                     }
                   </small>
                   <span
-                    className={`stock-status ${demand > stock.quantity ? "red-text" : ""}`}
+                    className={`stock-status ${missing !== null && missing > 0 ? "red-text" : ""}`}
                   >
-                    {demand > stock.quantity
-                      ? t("amountShortForPlannedJobs", {
-                          value0: kg(demand - stock.quantity),
-                        })
-                      : t("plannedNeedsCovered")}
+                    {missing === null
+                      ? t("unknownPlanning")
+                      : missing > 0
+                        ? t("amountShortForPlannedJobs", {
+                            value0: kg(missing),
+                          })
+                        : t("plannedNeedsCovered")}
                   </span>
                 </span>
                 <span className="stock-amount">
@@ -976,9 +998,8 @@ export default function App() {
   else if (section === "inventory" && id) {
     const stock = state.stocks.find((item) => item.id === id);
     const jobs = state.jobs.filter((job) => job.stockId === id);
-    const need = jobs
-      .filter((job) => job.status === "planned")
-      .reduce((total, job) => total + job.plannedQuantity, 0);
+    const { demand, missing } = inventorySummary(rawState, id);
+    const need = demand.total;
     content = stock ? (
       <>
         {back(t("allInventory"), "inventory")}
@@ -996,8 +1017,8 @@ export default function App() {
           <Metric label={t("plannedUseRemaining")} value={kg(need)} />
           <Metric
             label={t("planningShortfall")}
-            value={kg(Math.max(0, need - stock.quantity))}
-            tone={need > stock.quantity ? "red" : "green"}
+            value={kg(missing)}
+            tone={missing !== null && missing > 0 ? "red" : "green"}
           />
         </div>
         <section className="panel detail-panel">
@@ -1010,7 +1031,16 @@ export default function App() {
             )}
           </DetailRow>
           <DetailRow label={t("managedBy")}>
-            {resource("Ece Demir", "team/ece", <Users size={16} />)}
+            {(() => {
+              const managerId = state.warehouses.find(
+                (location) => location.id === stock.warehouseId,
+              )!.personId;
+              return resource(
+                state.people.find((person) => person.id === managerId)!.name,
+                "team/" + managerId,
+                <Users size={16} />,
+              );
+            })()}
           </DetailRow>
           <p className="fine-print">
             {t(
@@ -1122,6 +1152,13 @@ export default function App() {
                 : machine.kind === "seeder"
                   ? t("seedDrill")
                   : t("trailer")}
+          </DetailRow>
+          <DetailRow label={t("assetAvailability")}>
+            {machine.availability === "available"
+              ? t("assetAvailable")
+              : machine.availability === "unavailable"
+                ? t("assetUnavailable")
+                : t("assetUnknown")}
           </DetailRow>
           <p>
             {t(
@@ -1391,14 +1428,19 @@ export default function App() {
         <Dialog title={t("plantAPlan")} onClose={() => setModal(null)}>
           <PlanForm
             state={state}
+            go={go}
             busy={busy}
             error={actionError}
-            onSubmit={async (plan) => {
+            onSubmit={async (plan, newId) => {
               setBusy(true);
               setActionError("");
               try {
-                const newId = createId();
-                await commit((latest) => createPlannedJob(latest, plan, newId));
+                const action = planAction(rawState, plan, newId);
+                await confirmDraft(action, {
+                  approved: true,
+                  draftId: action.id,
+                  expectedRevision: rawState.revision,
+                });
                 setModal(null);
                 notify("jobPlanned");
                 go(`jobs/${newId}`);
@@ -1506,6 +1548,13 @@ export default function App() {
               )}
             </span>
           </div>
+          <ImpactPreview
+            state={state}
+            go={go}
+            impacts={
+              previewAction(rawState, sowingAction(rawState, sowingId)).impacts
+            }
+          />
           {actionError && (
             <div className="error-message" role="alert">
               {localizeMessage(actionError)}
@@ -1513,11 +1562,19 @@ export default function App() {
           )}
           <button
             className="button dark full"
-            disabled={busy}
+            disabled={
+              busy ||
+              !previewAction(rawState, sowingAction(rawState, sowingId)).valid
+            }
             onClick={async () => {
               setBusy(true);
               try {
-                await commit((latest) => completeSowingJob(latest, sowingId));
+                const action = sowingAction(rawState, sowingId);
+                await confirmDraft(action, {
+                  approved: true,
+                  draftId: action.id,
+                  expectedRevision: rawState.revision,
+                });
                 setSowingId(null);
                 notify("sowingRecorded");
               } catch (error) {
@@ -1860,6 +1917,7 @@ function DraftReview({
                 value2: kg(shortage.available),
               })}
             </p>
+            {shortage.isMinimum && <p>{t("unknownPlanning")}</p>}
             {shortage.jobIds.map((id) => (
               <button
                 key={id}
@@ -1873,6 +1931,16 @@ function DraftReview({
           </div>
         </div>
       ))}
+      <ImpactPreview
+        state={state}
+        go={go}
+        impacts={preview.impacts.filter(
+          (impact) =>
+            !["remainingStock", "plannedDemand", "shortage"].includes(
+              impact.kind,
+            ),
+        )}
+      />
       <div className="source-links">
         <span>{t("linkedRecords")}</span>
         {draft.jobId && (
@@ -1933,15 +2001,19 @@ function DraftReview({
 
 function PlanForm({
   state,
+  go,
   onSubmit,
   busy,
   error,
 }: {
   state: FarmState;
-  onSubmit: (draft: PlanDraft) => void;
+  go: (route: string) => void;
+  onSubmit: (draft: PlanDraft, taskId: string) => void;
   busy: boolean;
   error: string;
 }) {
+  const [taskId] = useState(createId);
+  const [reviewing, setReviewing] = useState(false);
   const [plan, setPlan] = useState<PlanDraft>({
     title: "",
     fieldId: "",
@@ -1951,13 +2023,20 @@ function PlanForm({
     quantity: "",
     dependencyId: "",
   });
-  const change = (key: keyof PlanDraft, value: string) =>
+  const change = (key: keyof PlanDraft, value: string) => {
+    setReviewing(false);
     setPlan({ ...plan, [key]: value });
+  };
+  const preview = previewAction(
+    state.domain,
+    planAction(state.domain, plan, taskId),
+  );
   return (
     <form
       onSubmit={(event) => {
         event.preventDefault();
-        onSubmit(plan);
+        if (!reviewing) setReviewing(true);
+        else if (preview.valid) onSubmit(plan, taskId);
       }}
     >
       <p>
@@ -2039,14 +2118,15 @@ function PlanForm({
                 <input
                   type="checkbox"
                   checked={plan.machineIds.includes(machine.id)}
-                  onChange={(event) =>
+                  onChange={(event) => {
+                    setReviewing(false);
                     setPlan({
                       ...plan,
                       machineIds: event.target.checked
                         ? [...plan.machineIds, machine.id]
                         : plan.machineIds.filter((id) => id !== machine.id),
-                    })
-                  }
+                    });
+                  }}
                 />
                 {machine.name}
               </label>
@@ -2068,6 +2148,22 @@ function PlanForm({
           </select>
         </label>
       </div>
+      {reviewing && (
+        <section className="plan-review">
+          <strong>{t("planPreview")}</strong>
+          <ImpactPreview
+            state={state}
+            go={go}
+            impacts={preview.impacts}
+            expanded
+          />
+          {preview.issues.map((issue) => (
+            <p className="validation-message" key={issue.field + issue.message}>
+              {localizeMessage(issue.message)}
+            </p>
+          ))}
+        </section>
+      )}
       {error && (
         <div className="error-message" role="alert">
           {localizeMessage(error)}
@@ -2078,11 +2174,111 @@ function PlanForm({
           "amountsDescribeFictionalPlansOnlyTheyAreNotAgriculturalRecommendations",
         )}
       </p>
-      <button className="button dark full" type="submit" disabled={busy}>
+      <button
+        className="button dark full"
+        type="submit"
+        disabled={busy || (reviewing && !preview.valid)}
+      >
         <Plus size={18} />
-        {busy ? t("saving") : t("savePlannedJob")}
+        {busy ? t("saving") : reviewing ? t("confirmSave") : t("reviewPlan")}
       </button>
     </form>
+  );
+}
+
+function ImpactPreview({
+  state,
+  impacts,
+  go,
+  expanded = false,
+}: {
+  state: FarmState;
+  impacts: Impact[];
+  go: (route: string) => void;
+  expanded?: boolean;
+}) {
+  const language = useLanguage();
+  if (!impacts.length) return null;
+  const labels = {
+    confirmed: "impactConfirmed",
+    warning: "impactWarning",
+    unknown: "impactUnknown",
+  } as const;
+  return (
+    <details className="impact-preview" open={expanded || undefined}>
+      <summary>
+        {t("otherImpacts")} ({impacts.length})
+      </summary>
+      {impacts.map((impact) => {
+        const values: Record<string, unknown> = { ...impact.values };
+        for (const [key, value] of Object.entries(values)) {
+          if (typeof value === "number")
+            values[key] = new Intl.NumberFormat(
+              language === "tr" ? "tr-TR" : "en-GB",
+              { maximumFractionDigits: 3 },
+            ).format(value);
+        }
+        if (impact.values.task) {
+          values.task =
+            state.jobs.find((job) => job.id === impact.values.taskId)?.title ??
+            values.task;
+        }
+        if (impact.values.asset) {
+          values.asset =
+            state.machines.find(
+              (machine) => machine.id === impact.values.assetId,
+            )?.name ?? values.asset;
+        }
+        const routes: Record<string, string> = {
+          task: "jobs",
+          asset: "machines",
+          person: "team",
+          inventoryBalance: "inventory",
+          field: "fields",
+          storageLocation: "warehouses",
+        };
+        return (
+          <div className="impact-entry" key={impact.id}>
+            <strong>{t(labels[impact.classification])}</strong>
+            <p>{t(impact.messageKey as MessageKey, values)}</p>
+            <div className="impact-links">
+              {impact.records
+                .filter((record) => routes[record.kind])
+                .map((record) => {
+                  const items =
+                    record.kind === "task"
+                      ? state.jobs
+                      : record.kind === "asset"
+                        ? state.machines
+                        : record.kind === "person"
+                          ? state.people
+                          : record.kind === "field"
+                            ? state.fields
+                            : record.kind === "storageLocation"
+                              ? state.warehouses
+                              : state.stocks;
+                  const item = items.find((item) => item.id === record.id);
+                  return (
+                    item && (
+                      <button
+                        className="resource-link"
+                        type="button"
+                        key={record.kind + record.id}
+                        onClick={() =>
+                          go(routes[record.kind] + "/" + record.id)
+                        }
+                      >
+                        {"title" in item ? item.title : item.name}
+                        <ArrowUpRight size={14} />
+                      </button>
+                    )
+                  );
+                })}
+            </div>
+          </div>
+        );
+      })}
+    </details>
   );
 }
 

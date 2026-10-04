@@ -53,9 +53,9 @@ describe("first farm scenario", () => {
         jobIds: ["east-fertilize"],
       },
     ]);
-    expect(state.stocks[0].quantity).toBe(800);
-    expect(state.consumptions).toHaveLength(0);
-    expect(state.jobs[0].status).toBe("planned");
+    expect(state.inventoryBalances[0].quantity).toBe(800);
+    expect(state.inventoryTransactions).toHaveLength(0);
+    expect(state.tasks[0].status).toBe("planned");
   });
   it("atomically completes the job, stores consumption and deducts stock only after confirmation", () => {
     const initial = createDemoState();
@@ -65,19 +65,17 @@ describe("first farm scenario", () => {
       0,
       "2026-10-04T08:00:00.000Z",
     );
-    expect(next.stocks[0].quantity).toBe(200);
-    expect(next.jobs[0].status).toBe("completed");
-    expect(next.jobs[1].status).toBe("planned");
-    expect(next.consumptions).toHaveLength(1);
-    expect(next.consumptions[0]).toMatchObject({
+    expect(next.inventoryBalances[0].quantity).toBe(200);
+    expect(next.tasks[0].status).toBe("completed");
+    expect(next.tasks[1].status).toBe("planned");
+    expect(next.inventoryTransactions).toHaveLength(1);
+    expect(next.inventoryTransactions[0]).toMatchObject({
       quantity: 600,
       before: 800,
       after: 200,
-      jobId: "north-fertilize",
-      fieldId: "north",
-      stockId: "fertilizer-a",
+      inventoryBalanceId: "fertilizer-a",
     });
-    expect(initial.stocks[0].quantity).toBe(800);
+    expect(initial.inventoryBalances[0].quantity).toBe(800);
     expect(isFarmState(next)).toBe(true);
     expect(getShortages(next)[0].missing).toBe(100);
   });
@@ -87,8 +85,8 @@ describe("first farm scenario", () => {
     expect(confirmOperation(once, { ...draft, id: "different-id" }, 1)).toBe(
       once,
     );
-    expect(once.stocks[0].quantity).toBe(200);
-    expect(once.consumptions).toHaveLength(1);
+    expect(once.inventoryBalances[0].quantity).toBe(200);
+    expect(once.inventoryTransactions).toHaveLength(1);
   });
   it("persists completion and idempotency across storage reloads", () => {
     let stored: string | null = null;
@@ -101,10 +99,10 @@ describe("first farm scenario", () => {
     saveFarm(storage, confirmOperation(createDemoState(), draft, 0));
     const loaded = loadFarm(storage);
     expect(loaded.error).toBeNull();
-    expect(loaded.state.stocks[0].quantity).toBe(200);
-    expect(confirmOperation(loaded.state, draft, 0).consumptions).toHaveLength(
-      1,
-    );
+    expect(loaded.state.inventoryBalances[0].quantity).toBe(200);
+    expect(
+      confirmOperation(loaded.state, draft, 0).inventoryTransactions,
+    ).toHaveLength(1);
   });
 });
 
@@ -147,7 +145,7 @@ describe("validation and planning", () => {
     expect(() => confirmOperation(state, draft, 99)).toThrow(
       "Farm data changed",
     );
-    expect(state.stocks[0].quantity).toBe(800);
+    expect(state.inventoryBalances[0].quantity).toBe(800);
   });
   it("creating a plan preserves physical stock and changes planning shortage only", () => {
     const initial = createDemoState();
@@ -164,9 +162,9 @@ describe("validation and planning", () => {
       },
       "south-fertilize",
     );
-    expect(next.jobs).toHaveLength(4);
-    expect(next.stocks[0].quantity).toBe(800);
-    expect(next.consumptions).toHaveLength(0);
+    expect(next.tasks).toHaveLength(4);
+    expect(next.inventoryBalances[0].quantity).toBe(800);
+    expect(next.inventoryTransactions).toHaveLength(0);
     expect(getShortages(next)[0].missing).toBe(200);
   });
   it("enforces the sowing prerequisite and completes without fictional seed consumption", () => {
@@ -175,24 +173,24 @@ describe("validation and planning", () => {
     );
     const fertilized = confirmOperation(createDemoState(), draft, 0);
     const sown = completeSowingJob(fertilized, "north-sow");
-    expect(sown.jobs[2].status).toBe("completed");
-    expect(sown.stocks[0].quantity).toBe(200);
-    expect(sown.consumptions).toHaveLength(1);
+    expect(sown.tasks[2].status).toBe("completed");
+    expect(sown.inventoryBalances[0].quantity).toBe(200);
+    expect(sown.inventoryTransactions).toHaveLength(1);
   });
   it("blocks fertilizer plans with an unfinished dependency", () => {
     const state = createDemoState();
-    state.jobs[0].dependencyId = "east-fertilize";
+    state.tasks[0].dependencyId = "east-fertilize";
     expect(() => confirmOperation(state, draft, 0)).toThrow("prerequisite");
   });
   it("detects malformed or incompatible storage and surfaces save failures", () => {
     expect(
       loadFarm({ getItem: () => "{bad", setItem: () => {} }).error,
     ).not.toBeNull();
-    expect(isFarmState({ ...createDemoState(), version: 2 })).toBe(false);
+    expect(isFarmState({ ...createDemoState(), version: 3 })).toBe(false);
     expect(
       isFarmState({
         ...createDemoState(),
-        stocks: [{ id: "bad", quantity: -3 }],
+        inventoryBalances: [{ id: "bad", quantity: -3 }],
       }),
     ).toBe(false);
     expect(() =>
@@ -210,10 +208,10 @@ describe("validation and planning", () => {
   it("reset returns a separate complete original dataset", () => {
     const changed = confirmOperation(createDemoState(), draft, 0);
     const reset = createDemoState();
-    expect(reset.stocks[0].quantity).toBe(800);
-    expect(reset.jobs.every((job) => job.status === "planned")).toBe(true);
-    expect(reset.consumptions).toHaveLength(0);
-    expect(changed.stocks[0].quantity).toBe(200);
+    expect(reset.inventoryBalances[0].quantity).toBe(800);
+    expect(reset.tasks.every((job) => job.status === "planned")).toBe(true);
+    expect(reset.inventoryTransactions).toHaveLength(0);
+    expect(changed.inventoryBalances[0].quantity).toBe(200);
   });
 });
 
@@ -270,7 +268,7 @@ describe("honest local interpreter", () => {
   });
   it("does not choose arbitrarily when a field has more than one matching job", async () => {
     const state = createDemoState();
-    state.jobs.push({ ...state.jobs[0], id: "north-second" });
+    state.tasks.push({ ...state.tasks[0], id: "north-second" });
     expect(
       await demoInterpreter.interpret(
         "Kuzey tarlasında 600 kg gübre kullandım",

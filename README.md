@@ -48,7 +48,7 @@ Terminaldeki ağ adresini telefonda açın. Bu komut uygulamayı yerel ağda eri
 4. **Kaynak kayıtları** içindeki İş, Stok ve Tarla düğmeleri gerçek detay sayfalarını açar. **İncelemeye devam et** ile taslağa dönülür.
 5. **Onayla ve kaydet** ile Kuzey gübreleme işi tamamlanır, tüketim kaydı oluşturulur ve fiziksel stok **200 kg** olur.
 6. **İşler → Tamamlandı** ve **Çiftliğim → Depo → Demo Gübre A** üzerinden sonucu inceleyin. Yenileme sonrası kayıtlar korunur. Aynı iş veya işlem tekrar onaylanırsa ikinci kez stok düşmez.
-7. Kuzey ekim işi artık önkoşulunu karşılar. Ekim için malzeme girilmediği açıkça belirtilir; tamamlamak seed tüketimi uydurmaz.
+7. Kuzey ekim işi artık önkoşulunu karşılar. Ekim için malzeme girilmediği açıkça belirtilir; tamamlamak tohum tüketimi uydurmaz, miktarı bilinmeyen ayrı bir gerçekleşen iş kaydı oluşturur.
 8. **Çiftliğim → Demo verilerini sıfırla** ile, ikinci bir onaydan sonra başlangıç verilerine dönülür.
 
 Miktarı önizlemede değiştirebilir veya **Taslağı iptal et** ile işlemi iptal edebilirsiniz. Fiziksel stoktan fazla tüketim, sıfır/negatif/geçersiz miktar ve yanlış iş–tarla–malzeme eşleştirmeleri engellenir. Nokta veya virgül ile en fazla üç ondalık basamak kabul edilir; binlik ayırıcı kullanmayın.
@@ -102,12 +102,52 @@ src/
   components/Dialog.tsx            Erişilebilir native dialog
   domain/types.ts                  Kayıt ve taslak tipleri
   domain/demo.ts                   Başlangıç demo verileri
-  domain/operations.ts             Hesaplama, doğrulama, idempotent kayıt
-  domain/storage.ts                Versiyonlu localStorage ve doğrulama
+  domain/actions.ts                Ortak taslak doğrulama, önizleme ve atomik commit
+  domain/impacts.ts                Kayıtlara dayalı etki motoru
+  domain/operations.ts             Mevcut formları ActionDraft yapısına dönüştürme
+  domain/selectors.ts              Merkezi hesaplar ve liste ekranı görünüm verisi
+  domain/validation.ts             Model, ilişki ve defter tutarlılığı kontrolü
+  domain/repository.ts             Okuma, onay, kalıcılık ve sıfırlama
+  domain/browserRepository.ts      Tek localStorage adaptörü ve dil tercihi
+  domain/storage.ts                Versiyonlu saklama ve güvenli geçiş
+  domain/migration.ts              Eski v1 verisini v2 domain kayıtlarına taşıma
+  domain/legacy.ts                 Yalnızca eski şema doğrulaması
+  domain/legacyDemo.ts             Eski şemalı test örneği
   domain/operations.test.ts        Senaryo ve hata testleri
-  hooks/useFarm.ts                 Depolama, sekme eşitleme, yazma akışı
+  domain/actions.test.ts           Ortak işlem, etkiler ve repository testleri
+  hooks/useFarm.ts                 Repository aboneliği ve React adaptörü
   interpreter/demoInterpreter.ts   Değiştirilebilir yorumlayıcı arayüzü
 ```
+
+## Domain mimarisi
+
+Asıl veri, sürüm 2 `FarmState` içinde saklanır. Her kaydın sabit `id` alanı vardır; varlıklar `farmId` ile çiftliğe, birbirlerine ilgili kayıt kimlikleriyle bağlanır. Adlar ve yerelleştirilmiş metinler bağlantı anahtarı değildir.
+
+| Varlık                     | Sorumluluğu                                                        |
+| -------------------------- | ------------------------------------------------------------------ |
+| Farm, Field, Person, Asset | Çiftlik, tarlalar, kişiler, makineler ve kullanılabilirlik         |
+| StorageLocation, Product   | Depo konumu ve konumdan bağımsız ürün tanımı                       |
+| InventoryBalance           | Bir ürünün belirli konumdaki fiziksel miktarı                      |
+| InventoryTransaction       | Fiziksel stok hareketi; tüketim, giriş, düzeltme veya iade türü    |
+| Task                       | Planlanan miktar, kişi, makineler, önkoşul ve tarih/saat bilgisi   |
+| OperationRecord            | Gerçekleşen miktar ve kaynaklar; planı değiştirmeyen ayrı iş kaydı |
+| DocumentSource             | Doğrulanmış kaynak tipi; demo verilerinde belge yok                |
+| ActivityLogEntry           | İşlemi yapan kişi, değişen kayıt kimlikleri ve zaman               |
+| ActionDraft, Impact        | Onay bekleyen öneri ve kayıtlardan hesaplanan etkileri             |
+
+Plan ve gerçekleşen miktar ayrı alanlardır. Bilinmeyen miktar, tarih ve saat `null` olur. Bilinen ihtiyaçların alt toplamı ayrıca hesaplanır; eksik miktarlar varsa toplam ihtiyaç ve kapsama durumu “bilinmiyor” kalır. Ekimde hayalî sıfır tüketim oluşturulmaz.
+
+Akış: **ActionDraft → doğrulama/eksik seçimler → impact preview → açık confirmation → commit**. `previewAction` ve `calculateImpacts` saf fonksiyonlardır; kayıt değiştirmezler. `commitAction`, onaylanan taslağı güncel revision ile doğrular; balance, Task, InventoryTransaction, OperationRecord ve ActivityLogEntry değişikliklerini tek yeni state olarak üretir. Plan oluşturma, makine durumu ve tarih değişimi yalnızca ilgili kayıtları ve geçmişi değiştirir; fiziksel tüketim oluşturmaz.
+
+`FarmRepository.confirm` en güncel saklanan veriyi yeniden okur ve bu state'i tek `setItem` ile kaydeder; yazma başarılı olmadan React'e yeni state yayımlanmaz. Aynı taslak kimliği, completion kimliği veya tamamlanmış görev yeniden işlendiğinde stok tekrar düşmez. İptal edilen taslağın kayıt katmanına gönderilmesi gerekmez. Sıfırlama, mevcut ayrı onay penceresinden repository üzerinden yeni demo state'i yazar.
+
+Etki motoru kalan stok, diğer planların ihtiyacı/açığı, ortak kişi/makine saat çakışmaları, eksik önkoşul, kullanılamayan makineye bağlı planlar ve tarih değişikliğinden etkilenen görevleri hesaplar. `confirmed` kayıtlarla hesaplanmış bilgi, `warning` dikkat gerektiren durum, `unknown` veri eksikliği demektir. Aynı kişinin adı veya “Bugün” etiketi saat çakışmasını kanıtlamaz. Demo saatleri eksiktir ve bunu açıkça bildirir. Motor tarımsal sonuç, verim veya doz önermez.
+
+Kalıcı anahtar **fieldnote.demo.v2**'dir. Geçerli **fieldnote.demo.v1** verisi otomatik taşınır; eski anahtar kurtarma kopyası olarak korunur. Özel iş adları, kimlikler, stok miktarı ve önceki tamamlamalar korunur. Geçiş veya kayıt okuma başarısızsa açıklamalı, yazmaya kapalı demo açılır; eski veri sessizce silinmez. Kullanıcı onaylı demo sıfırlaması v2'yi baştan oluşturur.
+
+Mevcut ekranlar `selectFarmView` üzerinden aynı merkezi kayıtların görünüm kopyalarını okur; bu kopyalar saklanmaz. Gelecek harita, depo binası veya karakter de kayıt `id`'siyle aynı selector/detail route'u açabilir ve aynı ActionDraft hattını kullanabilir. İsteğe bağlı `presentation.iconKey`, `scenePosition`, `visualState` yalnızca görüntü içindir; etki ve stok kuralları bunlara bakmaz. Bu sürümde oyun haritası eklenmedi.
+
+Gelecekte gerçek AI adaptörü yalnızca şemaya uygun ActionDraft önerecek. `isActionDraft`, `previewAction` ve kullanıcı seçimi/onayı üzerinden mevcut hat kullanılacak; yorumlayıcı localStorage veya repository yazma yetkisi almayacak. Backend ve veritabanı eklenince aynı kurallar sunucuda çalıştırılmalı; API anahtarı sunucuda kalmalı.
 
 ## Sürümün sınırları
 
@@ -117,8 +157,10 @@ src/
 - Gübre/ilaç belge desteği **Henüz bağlı değil / Not connected yet** olarak gösterilir. Gerçek etiket, doz, teşhis veya güvenli kullanım tavsiyesi üretilmez.
 - Dar yorumlayıcı tüm Türkçe/İngilizce cümleleri anlayamaz. Yalnızca belgelenen kalıplar desteklenir.
 - Kısmi bir miktarın onaylanması işi tamamlar; iş başına bir tüketim kaydı vardır. Çok aşamalı tüketim ve düzeltme/iptal defteri sonraki aşamadır.
-- Ekimde tohum bilgisi yoktur; ekim tamamlama yalnızca iş durumunu değiştirir. Tarla ürün aşaması otomatik güncellenmez.
-- İşler gün/sıra seviyesinde temsil edilir. Saat bazlı ekip/makine çakışma kontrolü ve gerçek takvim yoktur.
+- Ekimde tohum bilgisi yoktur; ekim tamamlama miktarı bilinmeyen gerçekleşen iş ve geçmiş kaydı oluşturur. Tarla ürün aşaması otomatik güncellenmez.
+- Etki motorunda tarih/saat çakışması, tarih değiştirme ve makine kullanılabilirliği işlemleri vardır; bunları düzenleyen takvim/makine formları henüz arayüze eklenmedi. Demo tarih/saatleri bilinmiyor. Gece yarısını aşan aralıklar desteklenmez.
+- Giriş/düzeltme/iade hareket tipleri tanımlıdır; bu türler için işlem taslağı ve ekran henüz yoktur. Fiziksel stok değişimi bu sürümde onaylı tüketimle yapılır.
+- ActivityLogEntry ve DocumentSource modelleri hazırdır; ayrı genel geçmiş ekranı ve belge doğrulama/bağlama akışı henüz yoktur.
 - Veriler yalnızca bu tarayıcının localStorage alanındadır. Tarayıcı verileri silinirse kayıtlar kaybolur; merkezi yedek veya cihazlar arası eşitleme yoktur. Bozuk kayıtlar sessizce üzerine yazılmaz, sıfırlama istenir.
 - Aynı anda çok kullanıcılı kullanım için sunucu tarafı transaction gerekir. Web Locks desteklemeyen tarayıcılarda sekmeler arası yarışlara karşı tam garanti verilmez.
 - Taslak henüz onaylanmadığı için yalnızca sayfa içinde tutulur; sayfa yenilenirse taslak silinir, onaylanmış kayıtlar kalır.

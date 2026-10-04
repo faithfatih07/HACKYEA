@@ -1811,3 +1811,45 @@ main {
     font-size: 24px;
   }
 }
+/* Small record-impact disclosure, using the existing mobile visual system. */
+.impact-preview {
+  margin: 16px 0;
+  border: 1px solid #bfc7ae;
+  border-radius: 12px;
+  padding: 12px;
+  background: #faf8ee;
+}
+.impact-preview summary {
+  min-height: 48px;
+  display: flex;
+  align-items: center;
+  cursor: pointer;
+  font-weight: 700;
+}
+.impact-preview summary::before {
+  content: "+";
+  margin-right: 10px;
+}
+.impact-preview[open] summary::before {
+  content: "−";
+}
+.impact-entry {
+  border-top: 1px solid #d8dccd;
+  padding: 12px 0;
+}
+.impact-entry p {
+  margin: 6px 0;
+  overflow-wrap: anywhere;
+}
+.impact-links {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.impact-links a {
+  min-height: 48px;
+  text-decoration: none;
+}
+.plan-review {
+  margin: 20px 0;
+}

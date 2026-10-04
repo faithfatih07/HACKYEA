@@ -7,6 +7,7 @@ import {
   localizeFarm,
   localizeMessage,
 } from "./messages";
+import { selectFarmView } from "../domain/selectors";
 import { createDemoState } from "../domain/demo";
 import {
   confirmOperation,
@@ -34,9 +35,9 @@ describe("language support preserves farm records", () => {
     expect(display.machines[0].name).toBe("Kırmızı traktör");
     expect(display.warehouses[0].name).toBe("Ana depo");
     expect(display.people[1].role).toBe("Çiftlik çalışanı");
-    expect(display.stocks).toEqual(state.stocks);
+    expect(display.stocks).toEqual(selectFarmView(state).stocks);
     expect(display.jobs.map((job) => job.id)).toEqual(
-      state.jobs.map((job) => job.id),
+      state.tasks.map((job) => job.id),
     );
     expect(state).toEqual(before);
   });
@@ -54,7 +55,7 @@ describe("language support preserves farm records", () => {
       },
       "custom-job",
     );
-    state.jobs[0].title = "Benim yeni iş adım";
+    state.tasks[0].title = "Benim yeni iş adım";
     const display = localizeFarm(state, "tr");
     expect(display.jobs.find((job) => job.id === "custom-job")?.title).toBe(
       "Fertilize Kuzey",
@@ -73,12 +74,12 @@ describe("language support preserves farm records", () => {
     };
     expect(previewOperation(localizeFarm(state, "tr"), draft).after).toBe(200);
     const next = confirmOperation(state, draft, state.revision);
-    expect(next.stocks[0].quantity).toBe(200);
+    expect(next.inventoryBalances[0].quantity).toBe(200);
     expect(getShortages(localizeFarm(next, "tr"))[0].missing).toBe(100);
     expect(
-      confirmOperation(next, draft, next.revision).consumptions,
+      confirmOperation(next, draft, next.revision).inventoryTransactions,
     ).toHaveLength(1);
-    expect(next.jobs[0].title).toBe("Fertilize Kuzey");
+    expect(next.tasks[0].title).toBe("Fertilize Kuzey");
   });
   it("resolves Turkish and English interpreter input to the same raw records", async () => {
     const state = createDemoState();

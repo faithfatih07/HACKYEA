@@ -1,5 +1,6 @@
 import { domainMessage, translate } from "../i18n/messages";
 import type { FarmState } from "../domain/types";
+import { selectFarmView } from "../domain/selectors";
 
 export const INTERPRETER_LABEL = domainMessage("interpreterLabel");
 export const EXAMPLES = [
@@ -35,7 +36,8 @@ const normalize = (text: string) =>
 
 // An intentionally narrow grammar, not an AI simulation. Unknown text is never guessed.
 export const demoInterpreter: FarmInterpreter = {
-  interpret(text, state) {
+  interpret(text, source) {
+    const state = selectFarmView(source);
     const value = normalize(text);
     const place = "(kuzey|guney|dogu|kuzey ve dogu|dogu ve kuzey)";
     const amount = "(\\d+(?:[.,]\\d{1,3})?)";

@@ -1,6 +1,7 @@
 import en from "./en.json";
 import tr from "./tr.json";
-import type { FarmState } from "../domain/types";
+import { selectFarmView } from "../domain/selectors";
+import type { FarmView, StateInput } from "../domain/selectors";
 
 export type Language = "tr" | "en";
 export type MessageKey = keyof typeof en;
@@ -59,7 +60,8 @@ export function dataText(value: string, locale: Language) {
 }
 
 // This is a display copy only. Never persist translated records or translate user job names.
-export function localizeFarm(state: FarmState, locale: Language): FarmState {
+export function localizeFarm(input: StateInput, locale: Language): FarmView {
+  const state = "domain" in input ? input : selectFarmView(input);
   return {
     ...state,
     fields: state.fields.map((field) => ({

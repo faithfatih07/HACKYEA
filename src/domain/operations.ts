@@ -1,219 +1,172 @@
 import { domainMessage } from "../i18n/messages";
-import type { FarmState, OperationDraft, PlanDraft, Shortage } from "./types";
-
-// Arithmetic is always local application code. Interpreters only propose drafts.
-export const roundKg = (value: number) =>
-  Math.round((value + Number.EPSILON) * 1000) / 1000;
-export function parseQuantity(value: string): number | null {
-  if (!/^\d+(?:[.,]\d{1,3})?$/.test(value.trim())) return null;
-  const number = Number(value.trim().replace(",", "."));
-  return Number.isFinite(number) && number > 0 && number <= 1_000_000
-    ? number
-    : null;
-}
+import { commitAction, previewAction } from "./actions";
+import { domainState, plannedDemand, selectFarmView } from "./selectors";
+import type { StateInput } from "./selectors";
+import { parseQuantity, roundKg } from "./quantity";
+import type {
+  ActionDraft,
+  FarmState,
+  OperationDraft,
+  PlanDraft,
+  Shortage,
+} from "./types";
+export { parseQuantity, roundKg } from "./quantity";
 
 export function getShortages(
-  state: FarmState,
+  input: StateInput,
   excludedJobId?: string,
   stockOverride?: { id: string; quantity: number },
 ): Shortage[] {
-  return state.stocks.flatMap((stock) => {
-    const jobs = state.jobs.filter(
-      (job) =>
-        job.status === "planned" &&
-        job.stockId === stock.id &&
-        job.id !== excludedJobId,
-    );
-    const required = roundKg(
-      jobs.reduce((total, job) => total + job.plannedQuantity, 0),
-    );
+  const state = domainState(input);
+  return state.inventoryBalances.flatMap((balance) => {
+    const demand = plannedDemand(state, balance.id, excludedJobId);
     const available =
-      stockOverride?.id === stock.id ? stockOverride.quantity : stock.quantity;
-    return required > available
+      stockOverride?.id === balance.id
+        ? stockOverride.quantity
+        : balance.quantity;
+    // If some planned amounts are unknown, this is only the known minimum shortage.
+    return available !== null && demand.knownQuantity > available
       ? [
           {
-            stockId: stock.id,
-            required,
+            stockId: balance.id,
+            required: demand.knownQuantity,
             available,
-            missing: roundKg(required - available),
-            jobIds: jobs.map((job) => job.id),
+            missing: roundKg(demand.knownQuantity - available),
+            jobIds: demand.taskIds,
+            ...(demand.unknownTaskIds.length ? { isMinimum: true } : {}),
           },
         ]
       : [];
   });
 }
-
-export function previewOperation(state: FarmState, draft: OperationDraft) {
-  const errors: string[] = [];
-  const job = state.jobs.find((item) => item.id === draft.jobId);
-  const field = state.fields.find((item) => item.id === draft.fieldId);
-  const stock = state.stocks.find((item) => item.id === draft.stockId);
-  const quantity = parseQuantity(draft.quantity);
-  if (!job) errors.push(domainMessage("errorChooseJob"));
-  else {
-    if (job.status !== "planned")
-      errors.push(domainMessage("errorAlreadyComplete"));
-    if (job.type !== "fertilizing")
-      errors.push(domainMessage("errorOnlyFertilizing"));
-    if (job.fieldId !== draft.fieldId)
-      errors.push(domainMessage("errorJobField"));
-    if (job.stockId !== draft.stockId)
-      errors.push(domainMessage("errorJobMaterial"));
-    if (
-      job.dependencyId &&
-      state.jobs.find((item) => item.id === job.dependencyId)?.status !==
-        "completed"
-    )
-      errors.push(domainMessage("errorPrerequisite"));
-  }
-  if (!field) errors.push(domainMessage("errorChooseField"));
-  if (!stock) errors.push(domainMessage("errorChooseMaterial"));
-  if (quantity === null) errors.push(domainMessage("errorAmount"));
-  if (stock && quantity !== null && quantity > stock.quantity)
-    errors.push(domainMessage("errorAvailable", { quantity: stock.quantity }));
-  const after =
-    stock && quantity !== null ? roundKg(stock.quantity - quantity) : null;
-  const shortages =
-    stock && after !== null && errors.length === 0
-      ? getShortages(state, draft.jobId, { id: stock.id, quantity: after })
-      : [];
+export function consumptionAction(
+  input: StateInput,
+  form: OperationDraft,
+): ActionDraft {
+  const state = domainState(input);
+  const balance = state.inventoryBalances.find((b) => b.id === form.stockId);
   return {
-    errors,
-    job,
-    field,
+    id: form.id,
+    farmId: state.farm.id,
+    actorId: state.farm.demoUserId,
+    kind: "recordConsumption",
+    completionId: "completion-" + form.jobId,
+    taskId: form.jobId || null,
+    fieldId: form.fieldId || null,
+    inventoryBalanceId: form.stockId || null,
+    productId: balance?.productId ?? null,
+    actualQuantity: parseQuantity(form.quantity),
+  };
+}
+export function planAction(
+  input: StateInput,
+  form: PlanDraft,
+  id: string,
+): ActionDraft {
+  const state = domainState(input);
+  const balance = state.inventoryBalances.find((b) => b.id === form.stockId);
+  return {
+    id: "plan-" + id,
+    kind: "createTask",
+    farmId: state.farm.id,
+    actorId: state.farm.demoUserId,
+    task: {
+      id,
+      farmId: state.farm.id,
+      title: form.title.trim(),
+      fieldId: form.fieldId,
+      personId: form.personId,
+      assetIds: [...form.machineIds],
+      productId: balance?.productId ?? null,
+      inventoryBalanceId: form.stockId || null,
+      plannedQuantity: parseQuantity(form.quantity),
+      type: "fertilizing",
+      status: "planned",
+      dependencyId: form.dependencyId || null,
+      schedule: { date: null, startTime: null, endTime: null },
+      scheduleLabel: "Today",
+      completedAt: null,
+    },
+  };
+}
+export function sowingAction(input: StateInput, taskId: string): ActionDraft {
+  const state = domainState(input);
+  return {
+    id: "sowing-" + taskId,
+    kind: "completeTask",
+    farmId: state.farm.id,
+    actorId: state.farm.demoUserId,
+    taskId,
+    completionId: "completion-" + taskId,
+  };
+}
+// Compatibility selectors for the existing form. All validation/calculation is shared.
+export function previewOperation(input: StateInput, form: OperationDraft) {
+  const state = domainState(input);
+  const view = "domain" in input ? input : selectFarmView(state);
+  const draft = consumptionAction(state, form);
+  const actionPreview = previewAction(state, draft);
+  const stock = view.stocks.find((s) => s.id === form.stockId);
+  const quantity = parseQuantity(form.quantity);
+  const after =
+    stock && stock.quantity !== null && quantity !== null
+      ? roundKg(stock.quantity - quantity)
+      : null;
+  return {
+    ...actionPreview,
+    actionDraft: draft,
+    errors: actionPreview.issues.map((i) => i.message),
+    job: view.jobs.find((t) => t.id === form.jobId),
+    field: view.fields.find((f) => f.id === form.fieldId),
     stock,
     quantity,
     after,
-    shortages,
-    valid: errors.length === 0,
+    shortages:
+      stock && after !== null && actionPreview.valid
+        ? getShortages(state, form.jobId, { id: stock.id, quantity: after })
+        : [],
   };
 }
-
+// Existing public functions delegate to the common pipeline; components use repository.confirm.
 export function confirmOperation(
   state: FarmState,
-  draft: OperationDraft,
+  form: OperationDraft,
   expectedRevision: number,
-  now = new Date().toISOString(),
-): FarmState {
-  // The operation ID AND completed job guard protect retries, double taps and rephrased requests.
-  if (
-    state.consumptions.some(
-      (record) =>
-        record.operationId === draft.id || record.jobId === draft.jobId,
-    )
-  )
-    return state;
-  if (state.revision !== expectedRevision)
-    throw new Error(domainMessage("errorStale"));
-  const preview = previewOperation(state, draft);
-  if (
-    !preview.valid ||
-    !preview.stock ||
-    preview.quantity === null ||
-    preview.after === null
-  )
-    throw new Error(preview.errors.join(" "));
-  return {
-    ...state,
-    revision: state.revision + 1,
-    stocks: state.stocks.map((stock) =>
-      stock.id === draft.stockId
-        ? { ...stock, quantity: preview.after! }
-        : stock,
-    ),
-    jobs: state.jobs.map((job) =>
-      job.id === draft.jobId
-        ? { ...job, status: "completed", completedAt: now }
-        : job,
-    ),
-    consumptions: [
-      ...state.consumptions,
-      {
-        id: `consumption-${draft.id}`,
-        operationId: draft.id,
-        jobId: draft.jobId,
-        fieldId: draft.fieldId,
-        stockId: draft.stockId,
-        quantity: preview.quantity,
-        before: preview.stock.quantity,
-        after: preview.after,
-        createdAt: now,
-      },
-    ],
-  };
+  now?: string,
+) {
+  const action = consumptionAction(state, form);
+  return commitAction(
+    state,
+    action,
+    { approved: true, draftId: action.id, expectedRevision },
+    now,
+  );
 }
-
 export function createPlannedJob(
   state: FarmState,
-  draft: PlanDraft,
+  form: PlanDraft,
   id: string,
-): FarmState {
-  const quantity = parseQuantity(draft.quantity);
-  if (!draft.title.trim()) throw new Error(domainMessage("errorJobName"));
-  if (!state.fields.some((field) => field.id === draft.fieldId))
-    throw new Error(domainMessage("errorChooseField"));
-  if (!state.people.some((person) => person.id === draft.personId))
+) {
+  if (!form.title.trim()) throw new Error(domainMessage("errorJobName"));
+  if (!state.people.some((p) => p.id === form.personId))
     throw new Error(domainMessage("errorChoosePerson"));
-  if (!state.stocks.some((stock) => stock.id === draft.stockId))
-    throw new Error(domainMessage("errorChooseMaterial"));
   if (
-    draft.machineIds.length === 0 ||
-    draft.machineIds.some(
-      (id) => !state.machines.some((machine) => machine.id === id),
-    )
+    !form.machineIds.length ||
+    form.machineIds.some((a) => !state.assets.some((asset) => asset.id === a))
   )
     throw new Error(domainMessage("errorChooseMachine"));
-  if (quantity === null) throw new Error(domainMessage("errorPlannedAmount"));
-  if (
-    draft.dependencyId &&
-    !state.jobs.some((job) => job.id === draft.dependencyId)
-  )
-    throw new Error(domainMessage("errorExistingPrerequisite"));
-  if (state.jobs.some((job) => job.id === id)) return state;
-  return {
-    ...state,
-    revision: state.revision + 1,
-    jobs: [
-      ...state.jobs,
-      {
-        id,
-        title: draft.title.trim(),
-        fieldId: draft.fieldId,
-        personId: draft.personId,
-        machineIds: draft.machineIds,
-        stockId: draft.stockId,
-        plannedQuantity: quantity,
-        dependencyId: draft.dependencyId || undefined,
-        type: "fertilizing",
-        status: "planned",
-        scheduled: "Today",
-      },
-    ],
-  };
+  const action = planAction(state, form, id);
+  return commitAction(state, action, {
+    approved: true,
+    draftId: action.id,
+    expectedRevision: state.revision,
+  });
 }
-
-export function completeSowingJob(state: FarmState, jobId: string): FarmState {
-  const job = state.jobs.find((job) => job.id === jobId);
-  if (!job || job.type !== "sowing")
-    throw new Error(domainMessage("errorChooseSowing"));
-  if (job.status === "completed") return state;
-  if (
-    job.dependencyId &&
-    state.jobs.find((item) => item.id === job.dependencyId)?.status !==
-      "completed"
-  )
-    throw new Error(domainMessage("errorPrerequisite"));
-  return {
-    ...state,
-    revision: state.revision + 1,
-    jobs: state.jobs.map((item) =>
-      item.id === jobId
-        ? {
-            ...item,
-            status: "completed",
-            completedAt: new Date().toISOString(),
-          }
-        : item,
-    ),
-  };
+export function completeSowingJob(state: FarmState, taskId: string) {
+  const action = sowingAction(state, taskId);
+  return commitAction(state, action, {
+    approved: true,
+    draftId: action.id,
+    expectedRevision: state.revision,
+  });
 }
