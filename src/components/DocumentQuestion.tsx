@@ -149,8 +149,10 @@ export function DocumentQuestion({
       <button
         className="button dark full"
         disabled={busy || !question.trim()}
+        aria-busy={busy}
         onClick={ask}
       >
+        {busy && <span className="ai-wait-mark" aria-hidden="true" />}
         {t(busy ? "aiLoading" : "askDocument")}
       </button>
       <small className="interpreter-label">

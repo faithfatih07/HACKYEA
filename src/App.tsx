@@ -71,6 +71,10 @@ import { DocumentQuestion, SourceCards } from "./components/DocumentQuestion";
 import { AIReviewNote } from "./components/AIReviewNote";
 import { ProductScanner } from "./components/ProductScanner";
 import { DemoLabels } from "./components/DemoLabels";
+import { ImpactStory } from "./components/ImpactStory";
+import { ReviewControls } from "./components/ReviewControls";
+import { savedStory } from "./presentation/impactScene";
+import type { SavedStory } from "./presentation/impactScene";
 import type { AIReviewMetadata } from "./components/AIReviewNote";
 import type { ActionDraft, OperationDraft, PlanDraft } from "./domain/types";
 import {
@@ -120,6 +124,7 @@ export default function App() {
   const [modal, setModal] = useState<"plan" | "reset" | "docs" | null>(null);
   const [changeDraft, setChangeDraft] = useState<ActionDraft | null>(null);
   const [showChange, setShowChange] = useState(false);
+  const [receipt, setReceipt] = useState<SavedStory | null>(null);
   const [sowingId, setSowingId] = useState<string | null>(null);
   const [text, setText] = useState("");
   const [interpreterError, setInterpreterError] = useState("");
@@ -290,6 +295,14 @@ export default function App() {
         draftId: action.id,
         expectedRevision: state.revision,
       });
+      setReceipt(
+        savedStory(
+          rawState,
+          committed,
+          action,
+          previewAction(rawState, action).impacts,
+        ),
+      );
       const next = selectFarmView(committed);
       const record = next.consumptions.find(
         (item) => item.operationId === draft.id || item.jobId === draft.jobId,
@@ -314,6 +327,33 @@ export default function App() {
           ? error.message
           : t("couldNotSavePleaseTryAgain"),
       );
+    } finally {
+      setBusy(false);
+    }
+  };
+  const confirmChange = async () => {
+    if (!changeDraft || busy || aiQuestionsPending) return;
+    setBusy(true);
+    setActionError("");
+    try {
+      const committed = await confirmDraft(changeDraft, {
+        approved: true,
+        draftId: changeDraft.id,
+        expectedRevision: rawState.revision,
+      });
+      setReceipt(
+        savedStory(
+          rawState,
+          committed,
+          changeDraft,
+          previewAction(rawState, changeDraft).impacts,
+        ),
+      );
+      setChangeDraft(null);
+      setShowChange(false);
+      notify("changeSaved");
+    } catch (error) {
+      setActionError(error instanceof Error ? error.message : t("saveFailed"));
     } finally {
       setBusy(false);
     }
@@ -611,7 +651,9 @@ export default function App() {
                 className="button dark full"
                 onClick={interpret}
                 disabled={!text.trim() || busy}
+                aria-busy={busy}
               >
+                {busy && <span className="ai-wait-mark" aria-hidden="true" />}
                 {t(busy ? "aiLoading" : "reviewEntry")}
                 <ArrowRight size={18} />
               </button>
@@ -1460,7 +1502,11 @@ export default function App() {
       <>
         {back(t("inventory"), "inventory")}
         {pageHeading(t("fictionalDemoData"), t("scanProduct"), t("scanScope"))}
-        <ProductScanner products={rawState.products} go={go} />
+        <ProductScanner
+          products={rawState.products}
+          go={go}
+          onMatch={() => notify("storyScanMatched")}
+        />
       </>
     );
   } else if (section === "demo-labels") {
@@ -1479,7 +1525,7 @@ export default function App() {
       <>
         {back(t("inventory"), "inventory")}
         {pageHeading(t("productRecord"), product.name, t("fictionalDemoData"))}
-        <section className="panel detail-panel">
+        <section className="panel detail-panel product-arrival">
           <p className="fine-print">{t("scanScope")}</p>
           <DetailRow label={t("priceLabel")}>
             {product.unitPrice == null
@@ -1717,6 +1763,20 @@ export default function App() {
           title={t("changePreview")}
           onClose={() => setShowChange(false)}
           wide
+          footer={
+            <ReviewControls
+              valid={
+                previewAction(rawState, changeDraft).valid &&
+                !aiQuestionsPending
+              }
+              busy={busy}
+              onConfirm={confirmChange}
+              onCancel={() => {
+                setChangeDraft(null);
+                setShowChange(false);
+              }}
+            />
+          }
         >
           {aiMetadata && (
             <AIReviewNote
@@ -1737,31 +1797,12 @@ export default function App() {
             error={actionError}
             busy={busy}
             confirmationBlocked={aiQuestionsPending}
+            externalActions
             onCancel={() => {
               setChangeDraft(null);
               setShowChange(false);
             }}
-            onConfirm={async () => {
-              if (busy || aiQuestionsPending) return;
-              setBusy(true);
-              setActionError("");
-              try {
-                await confirmDraft(changeDraft, {
-                  approved: true,
-                  draftId: changeDraft.id,
-                  expectedRevision: rawState.revision,
-                });
-                setChangeDraft(null);
-                setShowChange(false);
-                notify("changeSaved");
-              } catch (error) {
-                setActionError(
-                  error instanceof Error ? error.message : t("saveFailed"),
-                );
-              } finally {
-                setBusy(false);
-              }
-            }}
+            onConfirm={confirmChange}
           />
         </Dialog>
       )}
@@ -1770,12 +1811,26 @@ export default function App() {
           title={t("aQuickCheckBeforeWeSave")}
           onClose={() => setShowDraft(false)}
           wide
+          footer={
+            <ReviewControls
+              valid={
+                previewOperation(state, draft).valid && !aiQuestionsPending
+              }
+              busy={busy}
+              onConfirm={confirm}
+              onCancel={() => {
+                setDraft(null);
+                setShowDraft(false);
+              }}
+            />
+          }
         >
           {aiMetadata && (
             <AIReviewNote
               metadata={aiMetadata}
               acknowledged={aiAcknowledged}
               onAcknowledge={setAIAcknowledged}
+              proposedQuantity={draft.quantity}
             />
           )}
           <DraftReview
@@ -1791,9 +1846,37 @@ export default function App() {
             busy={busy}
             onConfirm={confirm}
             confirmationBlocked={aiQuestionsPending}
+            externalActions
             onCancel={() => {
               setDraft(null);
               setShowDraft(false);
+            }}
+          />
+        </Dialog>
+      )}
+      {receipt && (
+        <Dialog
+          title={t("storySaved")}
+          wide
+          onClose={() => setReceipt(null)}
+          footer={
+            <button
+              type="button"
+              className="button dark full"
+              onClick={() => setReceipt(null)}
+            >
+              {t("closeDialog")}
+            </button>
+          }
+        >
+          <ImpactStory
+            state={localizeFarm(receipt.before, language)}
+            draft={receipt.draft}
+            impacts={receipt.impacts}
+            committed={receipt.after}
+            go={(route) => {
+              setReceipt(null);
+              go(route);
             }}
           />
         </Dialog>
@@ -2110,6 +2193,7 @@ function DraftReview({
   error,
   busy,
   confirmationBlocked = false,
+  externalActions = false,
   onConfirm,
   onCancel,
 }: {
@@ -2120,6 +2204,7 @@ function DraftReview({
   error: string;
   busy: boolean;
   confirmationBlocked?: boolean;
+  externalActions?: boolean;
   onConfirm: () => void;
   onCancel: () => void;
 }) {
@@ -2308,6 +2393,7 @@ function DraftReview({
         go={go}
         draft={preview.actionDraft}
         impacts={preview.impacts}
+        valid={preview.valid}
       />
       <div className="source-links">
         <span>{t("linkedRecords")}</span>
@@ -2350,19 +2436,21 @@ function DraftReview({
           "fictionalWorkQuantitiesNotAgriculturalDoseRecommendationsConfirmingCom",
         )}
       </p>
-      <div className="dialog-actions">
-        <button className="button light" onClick={onCancel}>
-          {t("cancelDraft")}
-        </button>
-        <button
-          className="button dark"
-          disabled={!preview.valid || busy || confirmationBlocked}
-          onClick={onConfirm}
-        >
-          <Check size={18} />
-          {busy ? t("saving") : t("confirmSave")}
-        </button>
-      </div>
+      {!externalActions && (
+        <div className="dialog-actions">
+          <button className="button light" onClick={onCancel}>
+            {t("cancelDraft")}
+          </button>
+          <button
+            className="button dark"
+            disabled={!preview.valid || busy || confirmationBlocked}
+            onClick={onConfirm}
+          >
+            <Check size={18} />
+            {busy ? t("saving") : t("confirmSave")}
+          </button>
+        </div>
+      )}
     </>
   );
 }

@@ -27,9 +27,11 @@ const failureMessages: Record<CameraFailure, MessageKey> = {
 export function ProductScanner({
   products,
   go,
+  onMatch,
 }: {
   products: Product[];
   go: (route: string) => void;
+  onMatch?: () => void;
 }) {
   useLanguage();
   const [code, setCode] = useState("");
@@ -74,7 +76,10 @@ export function ProductScanner({
     const result = matchProductCode(input, products);
     setInvalid(result.status === "invalid");
     setUnknownCode(result.status === "unknown" ? result.code : null);
-    if (result.status === "found") go(`products/${result.product.id}`);
+    if (result.status === "found") {
+      onMatch?.();
+      go(`products/${result.product.id}`);
+    }
   }
 
   async function start() {

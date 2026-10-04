@@ -8,11 +8,13 @@ export function Dialog({
   children,
   onClose,
   wide = false,
+  footer,
 }: {
   title: string;
   children: ReactNode;
   onClose: () => void;
   wide?: boolean;
+  footer?: ReactNode;
 }) {
   const ref = useRef<HTMLDialogElement>(null);
   useEffect(() => {
@@ -28,7 +30,7 @@ export function Dialog({
   return (
     <dialog
       ref={ref}
-      className={`dialog ${wide ? "dialog-wide" : ""}`}
+      className={`dialog ${wide ? "dialog-wide" : ""} ${footer ? "dialog-with-footer" : ""}`}
       aria-labelledby="dialog-heading"
       onCancel={(event) => {
         event.preventDefault();
@@ -52,6 +54,7 @@ export function Dialog({
         </button>
       </header>
       <div className="dialog-body">{children}</div>
+      {footer && <footer className="dialog-footer">{footer}</footer>}
     </dialog>
   );
 }

@@ -16,10 +16,12 @@ export function AIReviewNote({
   metadata,
   acknowledged,
   onAcknowledge,
+  proposedQuantity,
 }: {
   metadata: AIReviewMetadata;
   acknowledged: boolean;
   onAcknowledge: (value: boolean) => void;
+  proposedQuantity?: string;
 }) {
   return (
     <section className="ai-review-note">
@@ -28,12 +30,26 @@ export function AIReviewNote({
       {metadata.bagConversion && (
         <>
           <p>
+            {proposedQuantity !== undefined &&
+              Number(proposedQuantity.replace(",", ".")) !==
+                metadata.bagConversion.count * metadata.bagConversion.kg && (
+                <strong>{t("storyOriginalConversion")} </strong>
+              )}
             {t("bagConversion", {
               count: metadata.bagConversion.count,
               kg: metadata.bagConversion.kg,
               total: metadata.bagConversion.count * metadata.bagConversion.kg,
             })}
           </p>
+          {proposedQuantity !== undefined &&
+            Number(proposedQuantity.replace(",", ".")) !==
+              metadata.bagConversion.count * metadata.bagConversion.kg && (
+              <p>
+                {t("storyEditedQuantity", {
+                  quantity: proposedQuantity || t("unknownStatus"),
+                })}
+              </p>
+            )}
           <SourceCards
             sections={documentSections.filter(
               (s) =>

@@ -46,6 +46,7 @@ export function ActionReview({
   error,
   busy,
   confirmationBlocked = false,
+  externalActions = false,
 }: {
   state: FarmView;
   draft: ActionDraft;
@@ -56,6 +57,7 @@ export function ActionReview({
   error: string;
   busy: boolean;
   confirmationBlocked?: boolean;
+  externalActions?: boolean;
 }) {
   const [amountInput, setAmountInput] = useState<{
     id: string;
@@ -455,6 +457,7 @@ export function ActionReview({
         state={state}
         draft={draft}
         impacts={preview.impacts}
+        valid={preview.valid}
         go={go}
       />
       {preview.issues.length > 0 && (
@@ -469,23 +472,25 @@ export function ActionReview({
           {localizeMessage(error)}
         </div>
       )}
-      <div className="dialog-actions">
-        <button
-          type="button"
-          className="button light"
-          onClick={onCancel}
-          disabled={busy}
-        >
-          {t("cancelDraft")}
-        </button>
-        <button
-          className="button dark"
-          disabled={!preview.valid || busy || confirmationBlocked}
-        >
-          {t("confirmSave")}
-          <Check size={18} />
-        </button>
-      </div>
+      {!externalActions && (
+        <div className="dialog-actions">
+          <button
+            type="button"
+            className="button light"
+            onClick={onCancel}
+            disabled={busy}
+          >
+            {t("cancelDraft")}
+          </button>
+          <button
+            className="button dark"
+            disabled={!preview.valid || busy || confirmationBlocked}
+          >
+            {t("confirmSave")}
+            <Check size={18} />
+          </button>
+        </div>
+      )}
     </form>
   );
 }

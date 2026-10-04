@@ -5,6 +5,7 @@ import "@fontsource-variable/dm-sans/wght.css";
 import "./styles.css";
 import "./operations.css";
 import "./scanning.css";
+import "./impactStory.css";
 
 ReactDOM.createRoot(document.getElementById("root")!).render(
   <React.StrictMode>
