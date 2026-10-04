@@ -22,6 +22,7 @@ export type Person = Entity & {
   name: string;
   role: string;
   initials: string;
+  availability?: "available" | "unavailable" | "unknown";
 };
 export type StorageLocation = Entity & {
   name: string;
@@ -33,6 +34,8 @@ export type Product = Entity & {
   kind: "fertilizer" | "pesticide" | "seed" | "fuel";
   unit: "kg" | "l";
   documentSourceIds: Id[];
+  unitPrice?: number | null;
+  currency?: string;
 };
 export type InventoryBalance = Entity & {
   productId: Id;
@@ -43,7 +46,8 @@ export type Asset = Entity & {
   name: string;
   kind: "tractor" | "spreader" | "seeder" | "trailer";
   note: string;
-  availability: "available" | "unavailable" | "unknown";
+  availability: "available" | "broken" | "unavailable" | "unknown";
+  repairExpectedAt?: string | null;
 };
 // Local farm time, half-open intervals [start, end). Missing hours are unknown.
 export type Schedule = {
@@ -65,8 +69,19 @@ export type Task = Entity & {
   schedule: Schedule;
   scheduleLabel: string;
   completedAt: string | null;
+  serviceOfferId?: Id | null;
+  lastFailureReason?: string | null;
+};
+export type ServiceOffer = Entity & {
+  name: string;
+  taskId: Id;
+  price: number | null;
+  transportCost: number | null;
+  durationHours: number | null;
+  currency: string;
 };
 export type OperationRecord = Entity & {
+  outcome?: "completed" | "notCompleted";
   draftId: Id;
   completionId: Id;
   taskId: Id;
@@ -112,7 +127,8 @@ export type EntityReference = {
     | "person"
     | "task"
     | "operationRecord"
-    | "documentSource";
+    | "documentSource"
+    | "serviceOffer";
   id: Id;
 };
 export type ActivityLogEntry = Entity & {
@@ -123,6 +139,18 @@ export type ActivityLogEntry = Entity & {
   createdAt: string | null;
 };
 export type Impact = {
+  sourceEntityType: EntityReference["kind"];
+  sourceEntityId: Id;
+  affectedEntityType: EntityReference["kind"];
+  affectedEntityId: Id;
+  relationType: string;
+  severity: "info" | "attention" | "blocked";
+  certainty: "confirmed" | "warning" | "unknown";
+  reason: string;
+  evidenceRefs: EntityReference[];
+  suggestedQuestion: string | null;
+  proposedChange: Record<string, unknown> | null;
+  level: number;
   id: Id;
   classification: "confirmed" | "warning" | "unknown";
   kind:
@@ -133,13 +161,21 @@ export type Impact = {
     | "scheduleUnknown"
     | "dependency"
     | "assetUnavailable"
-    | "dependentSchedule";
+    | "dependentSchedule"
+    | "directTask"
+    | "repairUnknown"
+    | "personUnavailable"
+    | "materialCoverage"
+    | "cost"
+    | "costUnknown"
+    | "serviceAlternative"
+    | "taskFailure";
   messageKey: string;
   values: Record<string, string | number>;
   records: EntityReference[];
 };
 type DraftBase = { id: Id; farmId: Id; actorId: Id };
-export type ActionDraft =
+type ExistingActionDraft =
   | (DraftBase & {
       kind: "recordConsumption";
       completionId: Id;
@@ -161,6 +197,31 @@ export type ActionDraft =
       taskId: Id | null;
       schedule: Schedule;
     });
+export type ActionDraft = ExistingActionDraft | ExtendedActionDraft;
+type ExtendedActionDraft = DraftBase &
+  (
+    | {
+        kind: "setPersonAvailability";
+        personId: Id | null;
+        availability: "available" | "unavailable" | "unknown";
+      }
+    | { kind: "assignTaskPerson"; taskId: Id | null; personId: Id | null }
+    | { kind: "assignTaskAssets"; taskId: Id | null; assetIds: Id[] }
+    | {
+        kind: "changeTaskMaterial";
+        taskId: Id | null;
+        inventoryBalanceId: Id | null;
+        productId: Id | null;
+        plannedQuantity: number | null;
+      }
+    | {
+        kind: "correctInventory";
+        inventoryBalanceId: Id | null;
+        countedQuantity: number | null;
+      }
+    | { kind: "failTask"; taskId: Id | null; reason: string | null }
+    | { kind: "linkServiceOffer"; taskId: Id | null; serviceOfferId: Id | null }
+  );
 export type Confirmation = {
   approved: boolean;
   draftId: Id;
@@ -193,6 +254,8 @@ export type FarmState = {
   operationRecords: OperationRecord[];
   documentSources: DocumentSource[];
   activityLog: ActivityLogEntry[];
+  // Optional to preserve existing v2 saves without a destructive reset.
+  serviceOffers?: ServiceOffer[];
 };
 // Editable form values are not domain records. Conversion happens before preview/commit.
 export type OperationDraft = {

@@ -100,10 +100,15 @@ src/
   i18n/messages.ts                 Kayıtları değiştirmeden metin yerelleştirme
   i18n/messages.test.ts            Dil ve veri koruma testleri
   components/Dialog.tsx            Erişilebilir native dialog
+  components/DecisionImpacts.tsx   Ortak karar zinciri ve kanıt bağlantıları
+  components/ActionReview.tsx      Ortak düzenleme ve onay formu
   domain/types.ts                  Kayıt ve taslak tipleri
   domain/demo.ts                   Başlangıç demo verileri
   domain/actions.ts                Ortak taslak doğrulama, önizleme ve atomik commit
-  domain/impacts.ts                Kayıtlara dayalı etki motoru
+  domain/impacts.ts                Saf öneri projeksiyonu ve genel etki motoru
+  domain/impacts.test.ts           Etki zinciri, yeni taslaklar ve idempotency testleri
+  domain/drafts.ts                 Ekran eylemleri için ActionDraft üretimi
+  domain/schedule.ts               Yerel takvimde sonraki pazartesi
   domain/operations.ts             Mevcut formları ActionDraft yapısına dönüştürme
   domain/selectors.ts              Merkezi hesaplar ve liste ekranı görünüm verisi
   domain/validation.ts             Model, ilişki ve defter tutarlılığı kontrolü
@@ -133,6 +138,7 @@ Asıl veri, sürüm 2 `FarmState` içinde saklanır. Her kaydın sabit `id` alan
 | OperationRecord            | Gerçekleşen miktar ve kaynaklar; planı değiştirmeyen ayrı iş kaydı |
 | DocumentSource             | Doğrulanmış kaynak tipi; demo verilerinde belge yok                |
 | ActivityLogEntry           | İşlemi yapan kişi, değişen kayıt kimlikleri ve zaman               |
+| ServiceOffer               | Göreve ait hayalî hizmet alternatifi, kayıtlı fiyat/nakliye/süre   |
 | ActionDraft, Impact        | Onay bekleyen öneri ve kayıtlardan hesaplanan etkileri             |
 
 Plan ve gerçekleşen miktar ayrı alanlardır. Bilinmeyen miktar, tarih ve saat `null` olur. Bilinen ihtiyaçların alt toplamı ayrıca hesaplanır; eksik miktarlar varsa toplam ihtiyaç ve kapsama durumu “bilinmiyor” kalır. Ekimde hayalî sıfır tüketim oluşturulmaz.
@@ -141,7 +147,7 @@ Akış: **ActionDraft → doğrulama/eksik seçimler → impact preview → aç�
 
 `FarmRepository.confirm` en güncel saklanan veriyi yeniden okur ve bu state'i tek `setItem` ile kaydeder; yazma başarılı olmadan React'e yeni state yayımlanmaz. Aynı taslak kimliği, completion kimliği veya tamamlanmış görev yeniden işlendiğinde stok tekrar düşmez. İptal edilen taslağın kayıt katmanına gönderilmesi gerekmez. Sıfırlama, mevcut ayrı onay penceresinden repository üzerinden yeni demo state'i yazar.
 
-Etki motoru kalan stok, diğer planların ihtiyacı/açığı, ortak kişi/makine saat çakışmaları, eksik önkoşul, kullanılamayan makineye bağlı planlar ve tarih değişikliğinden etkilenen görevleri hesaplar. `confirmed` kayıtlarla hesaplanmış bilgi, `warning` dikkat gerektiren durum, `unknown` veri eksikliği demektir. Aynı kişinin adı veya “Bugün” etiketi saat çakışmasını kanıtlamaz. Demo saatleri eksiktir ve bunu açıkça bildirir. Motor tarımsal sonuç, verim veya doz önermez.
+Etki motoru kalan stok, diğer planların ihtiyacı/açığı, ortak kişi/makine saat çakışmaları, eksik önkoşul, kullanılamayan makineye bağlı planlar ve tarih değişikliğinden etkilenen görevleri hesaplar. `confirmed` kayıtlarla hesaplanmış bilgi, `warning` dikkat gerektiren durum, `unknown` veri eksikliği demektir. Aynı kişinin adı veya “Bugün” etiketi saat çakışmasını kanıtlamaz. Yeni demo başlangıcında Doğu gübreleme için sonraki pazartesi 09:00–11:00 aralığı kayıtlıdır. Kuzey gübreleme ve Kuzey ekim saatleri bilinmiyor; motor bunları açıkça bildirir. Motor tarımsal sonuç, verim veya doz önermez.
 
 Kalıcı anahtar **fieldnote.demo.v2**'dir. Geçerli **fieldnote.demo.v1** verisi otomatik taşınır; eski anahtar kurtarma kopyası olarak korunur. Özel iş adları, kimlikler, stok miktarı ve önceki tamamlamalar korunur. Geçiş veya kayıt okuma başarısızsa açıklamalı, yazmaya kapalı demo açılır; eski veri sessizce silinmez. Kullanıcı onaylı demo sıfırlaması v2'yi baştan oluşturur.
 
@@ -149,17 +155,38 @@ Mevcut ekranlar `selectFarmView` üzerinden aynı merkezi kayıtların görünü
 
 Gelecekte gerçek AI adaptörü yalnızca şemaya uygun ActionDraft önerecek. `isActionDraft`, `previewAction` ve kullanıcı seçimi/onayı üzerinden mevcut hat kullanılacak; yorumlayıcı localStorage veya repository yazma yetkisi almayacak. Backend ve veritabanı eklenince aynı kurallar sunucuda çalıştırılmalı; API anahtarı sunucuda kalmalı.
 
+## Kararın etkileri demosu
+
+Üç demo aynı `ActionDraft → previewAction → calculateImpacts → DecisionImpacts → confirmation → commitAction → repository` hattını kullanır. Taslak üreticileri ve yorumlayıcı yalnızca öneri oluşturur; React bileşenleri stok/çakışma hesabı veya localStorage yazması yapmaz. `projectDraft` saf bir varsayımsal görünüm üretir; bu görünüm kalıcı kayıt değildir.
+
+**Önerilen sunum sırası A → C → B** (tüketim Kuzey işini tamamladığı için tarih değişikliğini önce gösterin):
+
+1. Eski demo kayıtlarınız varsa **Çiftliğim → Demo verilerini sıfırla → Demo verilerini sıfırla** ile yeni hayalî takvimi/teklifleri yükleyin. Önceki v2 kayıtları kendiliğinden değiştirilmez; sıfırlama yalnızca açık onayla yapılır.
+2. **A:** **Çiftliğim → Makineler → Kırmızı traktör → Arıza bildir**. Mevcut/yeni durum, traktörü gerçekten kullanan üç plan ve Kuzey gübreleme → Kuzey ekim bağı görünür. Bir düğüme dokunup **Neden etkilendi? / Kanıt kayıtları** bölümünü açın. Tamir zamanı bilinmiyor kalır. **Taslağı iptal et** hiçbir kayıt değiştirmez; **Onayla ve kaydet** yalnızca makine durumunu ve geçmişini değiştirir. Makine detayındaki etkiler güncel merkezi kayıtlardan yeniden hesaplanır.
+3. **C:** **İşler → Kuzey gübreleme → Pazartesiye taşımayı dene**. Saatler boşken onay devre dışıdır. **09:30–10:30** girince Doğu gübrelemenin kayıtlı 09:00–11:00 aralığı nedeniyle **Ali, kırmızı traktör ve serpme makinesi** çakışması kanıtlarıyla görünür. **11:00–12:00** aralığı Doğu ile çakışmaz (bitiş/başlangıç sınırları çakışma sayılmaz). Kuzey ekim tarihi bilinmediği için sıralama doğrulanamaz. **Onayla ve kaydet** sadece Kuzey'in takvimini ve geçmişini değiştirir; miktar ve bağlı görev tarihleri değişmez.
+4. **B:** **Bugün → Çiftlikte ne oldu?** alanına `Kuzey tarlasında 600 kg gübre kullandım` yazıp **İşlemi incele**. **800 − 600 = 200 kg**, Doğu ihtiyacı **300 kg** ve bilinen açık **100 kg**, aynı karar zincirinde stok ve görev bağlantılarıyla gösterilir. **Onayla ve kaydet** tek tüketim, tek gerçekleşen iş, tek geçmiş kaydı oluşturur; yeniden onay ikinci kez stok düşürmez. Arızalı bir makine hâlâ kayıtlıysa uyarı görünür; geçmişte gerçekleştiği bildirilen iş otomatik olarak uydurulmaz/iptal edilmez.
+
+Diğer eylemler de ortaktır: kişi detayından **Durumu değiştir**; iş detayından **İş planını değiştir** ile kişi, makineler, planlanan ürün/miktar, tamamlama, tamamlanamama veya hizmet alternatifi seçimi; stok detayından **Fiziksel sayımı düzelt**. Tamamlanamayan iş planlanan kalır; nedeni, `outcome: notCompleted` gerçekleşen deneme ve geçmiş kaydı tutulur. Daha sonra tamamlanabilir. Tüketim bilgisi olmadan iş tamamlama, miktarı `null` olan bir gerçekleşen iş oluşturur; stok hareketi oluşturmaz.
+
+`ServiceOffer` kayıtları hayalîdir: Hizmet A 1800 TRY + 200 TRY nakliye = **2000 TRY**; Hizmet B 1500 TRY ancak nakliye/süre bilinmiyor, toplamı doğrulanamıyor. Görev düzenlemesinde alternatif teklif bağlanabilir; kişi ve makineler kendiliğinden değiştirilmez. Demo gübresinin fiyatı girilmediğinden maliyeti bilinmiyor. Birim fiyat kayıtlıysa motor gerçek kayıtlı fiyat × miktar hesabını yapar; fiyat yoksa sıfır varsaymaz. Stok ortak fiziksel miktardır; görevler arasında rezervasyon/dağıtım yapılmaz. Her işin tek başına yeterliliği ve bütün işlerin toplam açığı ayrı gösterilir.
+
+`Impact` kaynak/etkilenen varlık türü ve kimliğini, ilişkiyi, `severity`, `certainty`, sade neden, `evidenceRefs`, gerekli soru, önerilen değişiklik ve bağımlılık seviyesini taşır. Eski `classification`, `kind`, `messageKey`, `values`, `records` alanları mevcut tüketim ve test uyumu için korunur. Kanıtlar kimliklerle görev, ürün, stok, depo, makine, kişi veya teklif detayını açar. Motor yalnızca kayıtlı dependency bağlantılarını (çok adımlı zincir dahil), ortak kişi/makine aralıklarını, fiziksel stok ve planlanan ihtiyaçları kullanır. Sunucu/model de aynı taslak şemasını kullanabilir; etki hesabı ve onay yerel modelden bağımsızdır.
+
+Görsel bileşen React/CSS ve mevcut Lucide ikonlarıyla yapıldı. React Flow'nun düğüm sürükleme, zoom/pan ve editör altyapısı bu dikey, salt okunur mobil zincir için gerekmiyor; ek paket eklenmedi. Düğümler ve seviye yerleşimi motor çıktısından üretilir, senaryo sonuçları sabit yazılmaz. Kısa giriş animasyonu `prefers-reduced-motion` ile kapanır. Gelecek harita/bina/karakter arayüzü aynı kayıt kimlikleri, taslak fabrikası ve etki bileşenini kullanabilir; bu sürümde harita yapılmadı.
+
+Saklama sürümü/anahtarı v2 kalır. Kişi müsaitliği, onarım zamanı, fiyat, hizmet alternatifleri ve başarısız deneme alanları geriye uyumlu isteğe bağlıdır; eski v2 verisi korunur. Eksik yeni alanlar bilinmiyor kabul edilir. Yeni teklifler/takvim yalnızca yeni demo veya onaylı sıfırlamada eklenir. Eski v1 migration ve bozuk kaydı koruyan hata akışı değişmedi.
+
 ## Sürümün sınırları
 
 - Tek çiftlik, tek demo kullanıcı; gerçek giriş, kullanıcı yetkileri veya sunucu yoktur.
-- Tarla/ekip/makine/stok kayıtları ilk sürümde örnek kayıt olarak okunur. Yeni iş planlanabilir; varlık ekleme/düzenleme ve stok girişi sonraki aşamadır.
+- Tarla, ürün, depo, kişi ve makine ekleme ekranı yoktur. Mevcut örneklerin müsaitliği, iş atamaları, planlanan miktar, hizmet alternatifi ve fiziksel stok sayımı onayla değiştirilebilir. Stok girişi/iadesi sonraki aşamadır.
 - Gerçek AI, RAG, sensör, hava durumu, bildirim servisi veya doküman araması yoktur.
 - Gübre/ilaç belge desteği **Henüz bağlı değil / Not connected yet** olarak gösterilir. Gerçek etiket, doz, teşhis veya güvenli kullanım tavsiyesi üretilmez.
 - Dar yorumlayıcı tüm Türkçe/İngilizce cümleleri anlayamaz. Yalnızca belgelenen kalıplar desteklenir.
-- Kısmi bir miktarın onaylanması işi tamamlar; iş başına bir tüketim kaydı vardır. Çok aşamalı tüketim ve düzeltme/iptal defteri sonraki aşamadır.
+- Kısmi bir miktarın onaylanması işi tamamlar; iş başına bir tüketim kaydı vardır. Çok aşamalı tüketim ve gerçekleşen tüketimi geri alma/iptal sonraki aşamadır.
 - Ekimde tohum bilgisi yoktur; ekim tamamlama miktarı bilinmeyen gerçekleşen iş ve geçmiş kaydı oluşturur. Tarla ürün aşaması otomatik güncellenmez.
-- Etki motorunda tarih/saat çakışması, tarih değiştirme ve makine kullanılabilirliği işlemleri vardır; bunları düzenleyen takvim/makine formları henüz arayüze eklenmedi. Demo tarih/saatleri bilinmiyor. Gece yarısını aşan aralıklar desteklenmez.
-- Giriş/düzeltme/iade hareket tipleri tanımlıdır; bu türler için işlem taslağı ve ekran henüz yoktur. Fiziksel stok değişimi bu sürümde onaylı tüketimle yapılır.
+- Takvim aralıkları çiftliğin yerel saatidir; gece yarısını aşan işler, saat dilimi dönüşümü ve tekrar eden görevler desteklenmez. Eksik saatle kesin çakışma üretilmez; tarih değiştirme başlangıç/bitiş saati gerektirir.
+- Stok düzeltmesi fiziksel sayım formuyla onaylanır; sıfır sayım geçerlidir. Bilinmeyen başlangıç stoğu için mutabakat/giriş akışı henüz yoktur. Giriş/iade hareketleri için ekran ve ActionDraft türü sonraki aşamadır.
 - ActivityLogEntry ve DocumentSource modelleri hazırdır; ayrı genel geçmiş ekranı ve belge doğrulama/bağlama akışı henüz yoktur.
 - Veriler yalnızca bu tarayıcının localStorage alanındadır. Tarayıcı verileri silinirse kayıtlar kaybolur; merkezi yedek veya cihazlar arası eşitleme yoktur. Bozuk kayıtlar sessizce üzerine yazılmaz, sıfırlama istenir.
 - Aynı anda çok kullanıcılı kullanım için sunucu tarafı transaction gerekir. Web Locks desteklemeyen tarayıcılarda sekmeler arası yarışlara karşı tam garanti verilmez.
@@ -171,3 +198,7 @@ Gelecekte gerçek AI adaptörü yalnızca şemaya uygun ActionDraft önerecek. `
 `FarmInterpreter` arayüzünü uygulayan bir backend adaptörü ekleyin. Frontend, metni ve sınırlı kayıt bağlamını sunucudaki endpoint’e gönderir; sunucu, gizli ortam değişkeninde tutulan API anahtarıyla modelden şemaya uygun **taslak** ister. Anahtar `VITE_*` değişkenine veya tarayıcı koduna konulmaz.
 
 Model yalnızca kayıt eşleştirme ve taslak önerisi yapar. Hesap, stok yeterliliği, yetki, kullanıcı onayı ve idempotent transaction sunucu tarafından doğrulanır; mevcut önizleme/onay deneyimi korunur. Ardından veritabanı, oturum ve ekip yetkilendirmesi eklenir. Belge/RAG desteği ayrı bir aşamadır ve bu prototipte bağlı değildir.
+
+## Bu değişikliğin kontrol sonucu
+
+`npm test`: **97/97 test geçti** (önceki 69 test korundu, 28 yeni test eklendi). `npm run build`: TypeScript ve Vite üretim derlemesi başarılı. Tarayıcıda 320 px ve 390 px genişlikte Bugün, arıza önizlemesi, tarih değişikliği ve tüketim/stok ekranları kontrol edildi; sayfa ve dialog içinde yatay taşma görülmedi. Arıza ve tarih onayı, kanıt kayıtlarına geçiş/dönüş, 600 kg tüketim onayı, yenilemede 200 kg stok ve tek tüketim kaydının korunması, sıfır sayım taslağının iptali ve TR/EN geçişi kontrol edildi. Yeni kayıtlar için reset repository testiyle doğrulandı. Kontrol için ayrı 5174 origin'i kullanıldı; mevcut 5173 tarayıcı verileri değiştirilmedi.

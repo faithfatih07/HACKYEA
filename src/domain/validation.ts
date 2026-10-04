@@ -54,6 +54,11 @@ export function validTask(state: FarmState, task: Task) {
         )) &&
     (task.plannedQuantity === null || isQuantity(task.plannedQuantity)) &&
     ["planned", "completed"].includes(task.status) &&
+    (task.serviceOfferId == null ||
+      (state.serviceOffers ?? []).some(
+        (o) => o.id === task.serviceOfferId && o.taskId === task.id,
+      )) &&
+    (task.lastFailureReason == null || text(task.lastFailureReason)) &&
     ["fertilizing", "sowing"].includes(task.type) &&
     nullableId(task.dependencyId) &&
     task.dependencyId !== task.id &&
@@ -116,7 +121,16 @@ export function isFarmState(value: unknown): value is FarmState {
     )
   )
     return false;
-  if (!s.people.every((p) => text(p.name) && text(p.role) && text(p.initials)))
+  if (
+    !s.people.every(
+      (p) =>
+        text(p.name) &&
+        text(p.role) &&
+        text(p.initials) &&
+        (p.availability === undefined ||
+          ["available", "unavailable", "unknown"].includes(p.availability)),
+    )
+  )
     return false;
   if (
     !s.assets.every(
@@ -124,7 +138,10 @@ export function isFarmState(value: unknown): value is FarmState {
         text(a.name) &&
         text(a.note) &&
         ["tractor", "spreader", "seeder", "trailer"].includes(a.kind) &&
-        ["available", "unavailable", "unknown"].includes(a.availability),
+        ["available", "broken", "unavailable", "unknown"].includes(
+          a.availability,
+        ) &&
+        (a.repairExpectedAt == null || isTimestamp(a.repairExpectedAt)),
     )
   )
     return false;
@@ -141,6 +158,10 @@ export function isFarmState(value: unknown): value is FarmState {
     !s.products.every(
       (p) =>
         text(p.name) &&
+        (p.unitPrice == null ||
+          (isQuantity(p.unitPrice) &&
+            text(p.currency) &&
+            p.currency.length > 0)) &&
         ["fertilizer", "pesticide", "seed", "fuel"].includes(p.kind) &&
         ["kg", "l"].includes(p.unit) &&
         ids(p.documentSourceIds) &&
@@ -178,12 +199,15 @@ export function isFarmState(value: unknown): value is FarmState {
   if (
     !s.operationRecords.every(
       (o) =>
+        (o.outcome === undefined ||
+          ["completed", "notCompleted"].includes(o.outcome)) &&
+        (o.outcome !== "notCompleted" || o.actualQuantity === null) &&
         id(o.draftId) &&
         id(o.completionId) &&
         s.tasks.some(
           (t) =>
             t.id === o.taskId &&
-            t.status === "completed" &&
+            (o.outcome === "notCompleted" || t.status === "completed") &&
             t.fieldId === o.fieldId,
         ) &&
         s.people.some((p) => p.id === o.personId) &&
@@ -206,15 +230,23 @@ export function isFarmState(value: unknown): value is FarmState {
     return false;
   for (const key of ["draftId", "completionId", "taskId"] as const)
     if (
-      new Set(s.operationRecords.map((o) => o[key])).size !==
-      s.operationRecords.length
+      new Set(
+        s.operationRecords
+          .filter((o) => key !== "taskId" || o.outcome !== "notCompleted")
+          .map((o) => o[key]),
+      ).size !==
+      s.operationRecords.filter(
+        (o) => key !== "taskId" || o.outcome !== "notCompleted",
+      ).length
     )
       return false;
   if (
     s.tasks.some(
       (t) =>
         t.status === "completed" &&
-        !s.operationRecords.some((o) => o.taskId === t.id),
+        !s.operationRecords.some(
+          (o) => o.taskId === t.id && o.outcome !== "notCompleted",
+        ),
     )
   )
     return false;
@@ -288,6 +320,27 @@ export function isFarmState(value: unknown): value is FarmState {
     )
   )
     return false;
+  if (
+    s.serviceOffers !== undefined &&
+    (!Array.isArray(s.serviceOffers) ||
+      !s.serviceOffers.every(isRecord) ||
+      new Set(s.serviceOffers.map((o) => o.id)).size !==
+        s.serviceOffers.length ||
+      !s.serviceOffers.every(
+        (o) =>
+          isRecord(o) &&
+          id(o.id) &&
+          o.farmId === s.farm.id &&
+          text(o.name) &&
+          text(o.currency) &&
+          o.currency.length > 0 &&
+          s.tasks.some((t) => t.id === o.taskId) &&
+          [o.price, o.transportCost, o.durationHours].every(
+            (v) => v === null || isQuantity(v),
+          ),
+      ))
+  )
+    return false;
   const refs: Record<string, { id: string }[]> = {
     farm: [s.farm],
     field: s.fields,
@@ -300,6 +353,7 @@ export function isFarmState(value: unknown): value is FarmState {
     inventoryTransaction: s.inventoryTransactions,
     operationRecord: s.operationRecords,
     documentSource: s.documentSources,
+    serviceOffer: s.serviceOffers ?? [],
   };
   if (
     !s.activityLog.every(
@@ -312,6 +366,13 @@ export function isFarmState(value: unknown): value is FarmState {
           "createTask",
           "setAssetAvailability",
           "rescheduleTask",
+          "setPersonAvailability",
+          "assignTaskPerson",
+          "assignTaskAssets",
+          "changeTaskMaterial",
+          "correctInventory",
+          "failTask",
+          "linkServiceOffer",
           "legacyMigration",
         ].includes(a.action) &&
         (a.createdAt === null || isTimestamp(a.createdAt)) &&

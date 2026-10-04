@@ -55,12 +55,49 @@ export function isActionDraft(value: unknown): value is ActionDraft {
     case "setAssetAvailability":
       return (
         nullableId(value.assetId) &&
-        ["available", "unavailable", "unknown"].includes(
+        ["available", "broken", "unavailable", "unknown"].includes(
           String(value.availability),
         )
       );
     case "rescheduleTask":
       return nullableId(value.taskId) && isSchedule(value.schedule);
+    case "setPersonAvailability":
+      return (
+        nullableId(value.personId) &&
+        ["available", "unavailable", "unknown"].includes(
+          String(value.availability),
+        )
+      );
+    case "assignTaskPerson":
+      return nullableId(value.taskId) && nullableId(value.personId);
+    case "assignTaskAssets":
+      return (
+        nullableId(value.taskId) &&
+        Array.isArray(value.assetIds) &&
+        value.assetIds.every((v) => typeof v === "string" && v.length > 0) &&
+        new Set(value.assetIds).size === value.assetIds.length
+      );
+    case "changeTaskMaterial":
+      return (
+        [value.taskId, value.productId, value.inventoryBalanceId].every(
+          nullableId,
+        ) &&
+        (value.plannedQuantity === null ||
+          typeof value.plannedQuantity === "number")
+      );
+    case "correctInventory":
+      return (
+        nullableId(value.inventoryBalanceId) &&
+        (value.countedQuantity === null ||
+          typeof value.countedQuantity === "number")
+      );
+    case "failTask":
+      return (
+        nullableId(value.taskId) &&
+        (value.reason === null || typeof value.reason === "string")
+      );
+    case "linkServiceOffer":
+      return nullableId(value.taskId) && nullableId(value.serviceOfferId);
     default:
       return false;
   }
@@ -95,16 +132,15 @@ export function previewAction(
     "taskId" in draft
       ? state.tasks.find((t) => t.id === draft.taskId)
       : undefined;
-  if (
-    draft.kind === "recordConsumption" ||
-    draft.kind === "completeTask" ||
-    draft.kind === "rescheduleTask"
-  ) {
+  if ("taskId" in draft) {
     if (!task) issue("taskId", "errorChooseJob", "missing");
     else {
       if (task.status !== "planned")
         issue("taskId", "errorAlreadyComplete", "blocked");
-      if (draft.kind !== "rescheduleTask" && isTaskBlocked(state, task))
+      if (
+        (draft.kind === "recordConsumption" || draft.kind === "completeTask") &&
+        isTaskBlocked(state, task)
+      )
         issue("taskId", "errorPrerequisite", "blocked");
     }
   }
@@ -121,7 +157,6 @@ export function previewAction(
     )
       issue("productId", "errorJobMaterial");
     if (task) {
-      if (task.type !== "fertilizing") issue("taskId", "errorOnlyFertilizing");
       if (task.fieldId !== draft.fieldId) issue("fieldId", "errorJobField");
       if (
         task.inventoryBalanceId !== draft.inventoryBalanceId ||
@@ -147,8 +182,6 @@ export function previewAction(
           quantity: balance.quantity,
         });
     }
-  } else if (draft.kind === "completeTask") {
-    if (task?.type !== "sowing") issue("taskId", "errorChooseSowing");
   } else if (draft.kind === "createTask") {
     if (
       !validTask(state, draft.task) ||
@@ -173,7 +206,61 @@ export function previewAction(
       issue("assetId", "errorChooseMachine", "missing");
   } else if (draft.kind === "rescheduleTask") {
     if (!isSchedule(draft.schedule)) issue("schedule", "errorSchedule");
+    else if (
+      !draft.schedule.date ||
+      !draft.schedule.startTime ||
+      !draft.schedule.endTime
+    )
+      issue("schedule", "errorScheduleHours", "missing");
   }
+  if (
+    draft.kind === "setPersonAvailability" ||
+    draft.kind === "assignTaskPerson"
+  ) {
+    if (!state.people.some((p) => p.id === draft.personId))
+      issue("personId", "errorChoosePerson", "missing");
+  }
+  if (draft.kind === "assignTaskAssets") {
+    if (
+      !draft.assetIds.length ||
+      draft.assetIds.some((id) => !state.assets.some((a) => a.id === id))
+    )
+      issue("assetIds", "errorChooseMachine", "missing");
+  }
+  if (draft.kind === "changeTaskMaterial") {
+    const b = state.inventoryBalances.find(
+      (b) => b.id === draft.inventoryBalanceId,
+    );
+    if (!b || b.productId !== draft.productId)
+      issue("inventoryBalanceId", "errorChooseMaterial", "missing");
+    if (
+      draft.plannedQuantity === null ||
+      !isQuantity(draft.plannedQuantity) ||
+      draft.plannedQuantity <= 0
+    )
+      issue("plannedQuantity", "errorPlannedAmount", "missing");
+  }
+  if (draft.kind === "correctInventory") {
+    const b = state.inventoryBalances.find(
+      (b) => b.id === draft.inventoryBalanceId,
+    );
+    if (!b) issue("inventoryBalanceId", "errorChooseMaterial", "missing");
+    else if (b.quantity === null)
+      issue("inventoryBalanceId", "errorUnknownStock", "blocked");
+    if (draft.countedQuantity === null || !isQuantity(draft.countedQuantity))
+      issue("countedQuantity", "errorCount", "missing");
+    else if (b && b.quantity === draft.countedQuantity)
+      issue("countedQuantity", "errorCountUnchanged");
+  }
+  if (draft.kind === "failTask" && !draft.reason?.trim())
+    issue("reason", "errorFailureReason", "missing");
+  if (
+    draft.kind === "linkServiceOffer" &&
+    !(state.serviceOffers ?? []).some(
+      (o) => o.id === draft.serviceOfferId && o.taskId === draft.taskId,
+    )
+  )
+    issue("serviceOfferId", "errorOffer", "missing");
   // Invalid external task shapes must not reach the effect calculator.
   const impacts =
     draft.kind === "createTask" && !validTask(state, draft.task)
@@ -203,7 +290,9 @@ export function commitAction(
   if (state.activityLog.some((a) => a.draftId === draft.id)) return state;
   if ("completionId" in draft) {
     const existing = state.operationRecords.find(
-      (o) => o.completionId === draft.completionId || o.taskId === draft.taskId,
+      (o) =>
+        o.completionId === draft.completionId ||
+        (o.taskId === draft.taskId && o.outcome !== "notCompleted"),
     );
     if (existing) {
       if (existing.taskId !== draft.taskId)
@@ -291,6 +380,97 @@ export function commitAction(
       ),
     };
     refs.push({ kind: "asset", id: draft.assetId! });
+  } else if (draft.kind === "setPersonAvailability") {
+    next = {
+      ...next,
+      people: state.people.map((p) =>
+        p.id === draft.personId
+          ? { ...p, availability: draft.availability }
+          : p,
+      ),
+    };
+    refs.push({ kind: "person", id: draft.personId! });
+  } else if (draft.kind === "correctInventory") {
+    const balance = state.inventoryBalances.find(
+      (b) => b.id === draft.inventoryBalanceId,
+    )!;
+    const tx = {
+      id: "correction-" + draft.id,
+      farmId: state.farm.id,
+      draftId: draft.id,
+      kind: "correction" as const,
+      inventoryBalanceId: balance.id,
+      productId: balance.productId,
+      storageLocationId: balance.storageLocationId,
+      operationRecordId: null,
+      quantity: roundKg(Math.abs(draft.countedQuantity! - balance.quantity!)),
+      before: balance.quantity!,
+      after: draft.countedQuantity!,
+      createdAt: now,
+      recordedById: draft.actorId,
+    };
+    next = {
+      ...next,
+      inventoryBalances: state.inventoryBalances.map((b) =>
+        b.id === balance.id ? { ...b, quantity: tx.after } : b,
+      ),
+      inventoryTransactions: [...state.inventoryTransactions, tx],
+    };
+    refs.push(
+      { kind: "inventoryBalance", id: balance.id },
+      { kind: "inventoryTransaction", id: tx.id },
+    );
+  } else if (draft.kind !== "rescheduleTask") {
+    next = {
+      ...next,
+      tasks: state.tasks.map((t) => {
+        if (t.id !== draft.taskId) return t;
+        switch (draft.kind) {
+          case "assignTaskPerson":
+            return { ...t, personId: draft.personId! };
+          case "assignTaskAssets":
+            return { ...t, assetIds: [...draft.assetIds] };
+          case "changeTaskMaterial":
+            return {
+              ...t,
+              productId: draft.productId,
+              inventoryBalanceId: draft.inventoryBalanceId,
+              plannedQuantity: draft.plannedQuantity,
+            };
+          case "failTask":
+            return { ...t, lastFailureReason: draft.reason!.trim() };
+          case "linkServiceOffer":
+            return { ...t, serviceOfferId: draft.serviceOfferId };
+        }
+      }),
+    };
+    refs.push({ kind: "task", id: draft.taskId! });
+    if (draft.kind === "failTask") {
+      const task = state.tasks.find((t) => t.id === draft.taskId)!;
+      const operation: OperationRecord = {
+        id: "attempt-" + draft.id,
+        farmId: state.farm.id,
+        draftId: draft.id,
+        completionId: "attempt-" + draft.id,
+        taskId: task.id,
+        fieldId: task.fieldId,
+        personId: task.personId,
+        assetIds: [...task.assetIds],
+        productId: null,
+        inventoryBalanceId: null,
+        actualQuantity: null,
+        occurredAt: now,
+        recordedById: draft.actorId,
+        outcome: "notCompleted",
+      };
+      next = {
+        ...next,
+        operationRecords: [...state.operationRecords, operation],
+      };
+      refs.push({ kind: "operationRecord", id: operation.id });
+    }
+    if (draft.kind === "linkServiceOffer")
+      refs.push({ kind: "serviceOffer", id: draft.serviceOfferId! });
   } else {
     next = {
       ...next,

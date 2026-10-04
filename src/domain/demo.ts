@@ -1,4 +1,5 @@
 import { domainMessage } from "../i18n/messages";
+import { nextMonday } from "./schedule";
 import type { FarmState } from "./types";
 
 export function createDemoState(): FarmState {
@@ -56,6 +57,7 @@ export function createDemoState(): FarmState {
         name: "Ali Kaya",
         role: domainMessage("roleWorker"),
         initials: "AK",
+        availability: "available",
         presentation: { visualState: "yellow", iconKey: "person" },
       },
       {
@@ -112,6 +114,7 @@ export function createDemoState(): FarmState {
         kind: "tractor",
         note: domainMessage("machineTractorNote"),
         availability: "available",
+        repairExpectedAt: null,
         presentation: { iconKey: "tractor" },
       },
       {
@@ -173,8 +176,8 @@ export function createDemoState(): FarmState {
         type: "fertilizing",
         status: "planned",
         dependencyId: null,
-        schedule: { date: null, startTime: null, endTime: null },
-        scheduleLabel: "Today",
+        schedule: { date: nextMonday(), startTime: "09:00", endTime: "11:00" },
+        scheduleLabel: nextMonday(),
         completedAt: null,
       },
       {
@@ -199,5 +202,27 @@ export function createDemoState(): FarmState {
     operationRecords: [],
     activityLog: [],
     documentSources: [],
+    serviceOffers: [
+      {
+        id: "service-a",
+        farmId,
+        taskId: "north-fertilize",
+        name: "Demo Hizmet A",
+        price: 1800,
+        transportCost: 200,
+        durationHours: 2,
+        currency: "TRY",
+      },
+      {
+        id: "service-b",
+        farmId,
+        taskId: "north-fertilize",
+        name: "Demo Hizmet B",
+        price: 1500,
+        transportCost: null,
+        durationHours: null,
+        currency: "TRY",
+      },
+    ],
   };
 }

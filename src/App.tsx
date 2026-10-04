@@ -40,6 +40,13 @@ import {
 } from "lucide-react";
 
 import { Dialog } from "./components/Dialog";
+import { DecisionImpacts } from "./components/DecisionImpacts";
+import {
+  ActionReview,
+  assetStatusText,
+  personStatusText,
+} from "./components/ActionReview";
+import { createChangeDraft } from "./domain/drafts";
 import { useFarm } from "./hooks/useFarm";
 import { createId } from "./domain/id";
 import {
@@ -50,7 +57,7 @@ import {
   previewOperation,
 } from "./domain/operations";
 import { demoInterpreter } from "./interpreter/demoInterpreter";
-import type { Impact, OperationDraft, PlanDraft } from "./domain/types";
+import type { ActionDraft, OperationDraft, PlanDraft } from "./domain/types";
 import {
   isTaskBlocked,
   inventorySummary,
@@ -96,6 +103,8 @@ export default function App() {
   const [draft, setDraft] = useState<OperationDraft | null>(null);
   const [showDraft, setShowDraft] = useState(false);
   const [modal, setModal] = useState<"plan" | "reset" | "docs" | null>(null);
+  const [changeDraft, setChangeDraft] = useState<ActionDraft | null>(null);
+  const [showChange, setShowChange] = useState(false);
   const [sowingId, setSowingId] = useState<string | null>(null);
   const [text, setText] = useState("");
   const [interpreterError, setInterpreterError] = useState("");
@@ -139,10 +148,16 @@ export default function App() {
     setShowDraft(false);
     setModal(null);
     setSowingId(null);
+    setShowChange(false);
     setActionError("");
   };
   const notify = (key: MessageKey, values: Record<string, number> = {}) => {
     setToast({ key, values });
+    setActionError("");
+  };
+  const startChange = (kind: ActionDraft["kind"], targetId: string) => {
+    setChangeDraft(createChangeDraft(rawState, kind, targetId));
+    setShowChange(true);
     setActionError("");
   };
   const startDraft = (job: Job) => {
@@ -683,6 +698,42 @@ export default function App() {
                   <span>{t("seedMaterialNotEnteredInThisDemo")}</span>
                 )}
               </DetailRow>
+              <DetailRow label={t("scheduleRecorded")}>
+                {job.schedule.date ?? t("unknownStatus")} ·{" "}
+                {job.schedule.startTime ?? "?"}–{job.schedule.endTime ?? "?"}
+              </DetailRow>
+              {job.lastFailureReason && (
+                <DetailRow label={t("lastFailureReason")}>
+                  {job.lastFailureReason}
+                </DetailRow>
+              )}
+              {job.serviceOfferId && (
+                <DetailRow label={t("linkedAlternative")}>
+                  {resource(
+                    rawState.serviceOffers?.find(
+                      (o) => o.id === job.serviceOfferId,
+                    )?.name ?? job.serviceOfferId,
+                    `services/${job.serviceOfferId}`,
+                  )}
+                </DetailRow>
+              )}
+              {job.status === "planned" && (
+                <div className="decision-entry-actions">
+                  <button
+                    className="button light full"
+                    onClick={() => startChange("rescheduleTask", job.id)}
+                  >
+                    <Clock3 size={18} />
+                    {t("moveToMonday")}
+                  </button>
+                  <button
+                    className="button light full"
+                    onClick={() => startChange("assignTaskPerson", job.id)}
+                  >
+                    {t("changeTask")}
+                  </button>
+                </div>
+              )}
               <DetailRow label={t("plannedAmount")}>
                 {stock ? kg(job.plannedQuantity) : t("notSpecified")}
               </DetailRow>
@@ -1021,6 +1072,14 @@ export default function App() {
             tone={missing !== null && missing > 0 ? "red" : "green"}
           />
         </div>
+        <div className="decision-entry-actions">
+          <button
+            className="button light"
+            onClick={() => startChange("correctInventory", id)}
+          >
+            {t("correctStock")}
+          </button>
+        </div>
         <section className="panel detail-panel">
           <DetailRow label={t("storedIn")}>
             {resource(
@@ -1119,6 +1178,11 @@ export default function App() {
                 <Tractor size={62} strokeWidth={1.7} />
               </div>
               <h2>{machine.name}</h2>
+              {machine.availability !== "available" && (
+                <p className="red-text">
+                  {assetStatusText(machine.availability)}
+                </p>
+              )}
               <p>
                 {t("amountPlannedJobs", {
                   value0: state.jobs.filter(
@@ -1154,11 +1218,7 @@ export default function App() {
                   : t("trailer")}
           </DetailRow>
           <DetailRow label={t("assetAvailability")}>
-            {machine.availability === "available"
-              ? t("assetAvailable")
-              : machine.availability === "unavailable"
-                ? t("assetUnavailable")
-                : t("assetUnknown")}
+            {assetStatusText(machine.availability)}
           </DetailRow>
           <p>
             {t(
@@ -1166,6 +1226,46 @@ export default function App() {
             )}
           </p>
         </section>
+        <div className="decision-entry-actions">
+          <button
+            className="button red"
+            onClick={() => startChange("setAssetAvailability", machine.id)}
+          >
+            <TriangleAlert size={18} />
+            {t("reportBreakdown")}
+          </button>
+          <button
+            className="button light"
+            onClick={() => startChange("setAssetAvailability", machine.id)}
+          >
+            {t("changeStatus")}
+          </button>
+        </div>
+        {machine.availability !== "available" && (
+          <DecisionImpacts
+            sourceLabel={t("currentValue")}
+            state={state}
+            go={go}
+            draft={{
+              id: `current-${machine.id}-${rawState.revision}`,
+              farmId: rawState.farm.id,
+              actorId: rawState.farm.demoUserId,
+              kind: "setAssetAvailability",
+              assetId: machine.id,
+              availability: machine.availability,
+            }}
+            impacts={
+              previewAction(rawState, {
+                id: `current-${machine.id}-${rawState.revision}`,
+                farmId: rawState.farm.id,
+                actorId: rawState.farm.demoUserId,
+                kind: "setAssetAvailability",
+                assetId: machine.id,
+                availability: machine.availability,
+              }).impacts
+            }
+          />
+        )}
         {jobsPanel(
           state.jobs.filter((job) => job.machineIds.includes(id)),
           t("assignedJobs"),
@@ -1221,6 +1321,15 @@ export default function App() {
         )}
         <section className="panel detail-panel">
           <DetailRow label={t("role")}>{person.role}</DetailRow>
+          <DetailRow label={t("personAvailability")}>
+            {personStatusText(person.availability)}
+          </DetailRow>
+          <button
+            className="button light full"
+            onClick={() => startChange("setPersonAvailability", person.id)}
+          >
+            {t("changeStatus")}
+          </button>
           {state.warehouses
             .filter((store) => store.personId === id)
             .map((store) => (
@@ -1236,6 +1345,65 @@ export default function App() {
           state.jobs.filter((job) => job.personId === id),
           t("assignedWork"),
         )}
+      </>
+    ) : (
+      <NotFound go={go} />
+    );
+  } else if (section === "products" && id) {
+    const product = rawState.products.find((p) => p.id === id);
+    content = product ? (
+      <>
+        {back(t("inventory"), "inventory")}
+        {pageHeading(t("productRecord"), product.name, t("fictionalDemoData"))}
+        <section className="panel detail-panel">
+          <DetailRow label={t("priceLabel")}>
+            {product.unitPrice == null
+              ? t("unknownStatus")
+              : `${product.unitPrice} ${product.currency} / ${product.unit}`}
+          </DetailRow>
+          {state.stocks
+            .filter((b) => b.productId === id)
+            .map((b) => (
+              <DetailRow key={b.id} label={t("stock")}>
+                {resource(`${b.name} · ${kg(b.quantity)}`, `inventory/${b.id}`)}
+              </DetailRow>
+            ))}
+          <button className="button light" onClick={() => setModal("docs")}>
+            {t("fertilizerPesticideDocuments")}
+          </button>
+        </section>
+      </>
+    ) : (
+      <NotFound go={go} />
+    );
+  } else if (section === "services" && id) {
+    const offer = rawState.serviceOffers?.find((o) => o.id === id);
+    content = offer ? (
+      <>
+        {back(t("allJobs"), "jobs")}
+        {pageHeading(t("serviceOffer"), offer.name, t("fictionalDemoData"))}
+        <section className="panel detail-panel">
+          <DetailRow label={t("job")}>
+            {resource(
+              state.jobs.find((j) => j.id === offer.taskId)?.title ??
+                offer.taskId,
+              `jobs/${offer.taskId}`,
+            )}
+          </DetailRow>
+          <DetailRow label={t("priceLabel")}>
+            {offer.price === null
+              ? t("unknownStatus")
+              : `${offer.price} ${offer.currency}`}
+          </DetailRow>
+          <DetailRow label={t("transportCost")}>
+            {offer.transportCost === null
+              ? t("unknownStatus")
+              : `${offer.transportCost} ${offer.currency}`}
+          </DetailRow>
+          <DetailRow label={t("workDuration")}>
+            {offer.durationHours ?? t("unknownStatus")}
+          </DetailRow>
+        </section>
       </>
     ) : (
       <NotFound go={go} />
@@ -1348,6 +1516,18 @@ export default function App() {
               </button>
             </div>
           )}
+          {changeDraft && !showChange && (
+            <div className="resume-draft">
+              <span>
+                <FileText size={17} />
+                {t("youHaveAnUnconfirmedDraft")}
+              </span>
+              <button onClick={() => setShowChange(true)}>
+                {t("continueReview")}
+                <ArrowRight size={15} />
+              </button>
+            </div>
+          )}
           {draft && !showDraft && (
             <div className="resume-draft">
               <span>
@@ -1399,6 +1579,50 @@ export default function App() {
             <X size={17} />
           </button>
         </div>
+      )}
+      {showChange && changeDraft && (
+        <Dialog
+          title={t("changePreview")}
+          onClose={() => setShowChange(false)}
+          wide
+        >
+          <ActionReview
+            state={state}
+            draft={changeDraft}
+            setDraft={(next) => {
+              setChangeDraft(next);
+              setActionError("");
+            }}
+            go={go}
+            error={actionError}
+            busy={busy}
+            onCancel={() => {
+              setChangeDraft(null);
+              setShowChange(false);
+            }}
+            onConfirm={async () => {
+              if (busy) return;
+              setBusy(true);
+              setActionError("");
+              try {
+                await confirmDraft(changeDraft, {
+                  approved: true,
+                  draftId: changeDraft.id,
+                  expectedRevision: rawState.revision,
+                });
+                setChangeDraft(null);
+                setShowChange(false);
+                notify("changeSaved");
+              } catch (error) {
+                setActionError(
+                  error instanceof Error ? error.message : t("saveFailed"),
+                );
+              } finally {
+                setBusy(false);
+              }
+            }}
+          />
+        </Dialog>
       )}
       {showDraft && draft && (
         <Dialog
@@ -1508,6 +1732,8 @@ export default function App() {
                 setBusy(true);
                 try {
                   await reset();
+                  setChangeDraft(null);
+                  setShowChange(false);
                   setDraft(null);
                   setText("");
                   setInterpreterError("");
@@ -1934,12 +2160,8 @@ function DraftReview({
       <ImpactPreview
         state={state}
         go={go}
-        impacts={preview.impacts.filter(
-          (impact) =>
-            !["remainingStock", "plannedDemand", "shortage"].includes(
-              impact.kind,
-            ),
-        )}
+        draft={preview.actionDraft}
+        impacts={preview.impacts}
       />
       <div className="source-links">
         <span>{t("linkedRecords")}</span>
@@ -2027,10 +2249,8 @@ function PlanForm({
     setReviewing(false);
     setPlan({ ...plan, [key]: value });
   };
-  const preview = previewAction(
-    state.domain,
-    planAction(state.domain, plan, taskId),
-  );
+  const action = planAction(state.domain, plan, taskId);
+  const preview = previewAction(state.domain, action);
   return (
     <form
       onSubmit={(event) => {
@@ -2154,6 +2374,7 @@ function PlanForm({
           <ImpactPreview
             state={state}
             go={go}
+            draft={action}
             impacts={preview.impacts}
             expanded
           />
@@ -2186,101 +2407,7 @@ function PlanForm({
   );
 }
 
-function ImpactPreview({
-  state,
-  impacts,
-  go,
-  expanded = false,
-}: {
-  state: FarmState;
-  impacts: Impact[];
-  go: (route: string) => void;
-  expanded?: boolean;
-}) {
-  const language = useLanguage();
-  if (!impacts.length) return null;
-  const labels = {
-    confirmed: "impactConfirmed",
-    warning: "impactWarning",
-    unknown: "impactUnknown",
-  } as const;
-  return (
-    <details className="impact-preview" open={expanded || undefined}>
-      <summary>
-        {t("otherImpacts")} ({impacts.length})
-      </summary>
-      {impacts.map((impact) => {
-        const values: Record<string, unknown> = { ...impact.values };
-        for (const [key, value] of Object.entries(values)) {
-          if (typeof value === "number")
-            values[key] = new Intl.NumberFormat(
-              language === "tr" ? "tr-TR" : "en-GB",
-              { maximumFractionDigits: 3 },
-            ).format(value);
-        }
-        if (impact.values.task) {
-          values.task =
-            state.jobs.find((job) => job.id === impact.values.taskId)?.title ??
-            values.task;
-        }
-        if (impact.values.asset) {
-          values.asset =
-            state.machines.find(
-              (machine) => machine.id === impact.values.assetId,
-            )?.name ?? values.asset;
-        }
-        const routes: Record<string, string> = {
-          task: "jobs",
-          asset: "machines",
-          person: "team",
-          inventoryBalance: "inventory",
-          field: "fields",
-          storageLocation: "warehouses",
-        };
-        return (
-          <div className="impact-entry" key={impact.id}>
-            <strong>{t(labels[impact.classification])}</strong>
-            <p>{t(impact.messageKey as MessageKey, values)}</p>
-            <div className="impact-links">
-              {impact.records
-                .filter((record) => routes[record.kind])
-                .map((record) => {
-                  const items =
-                    record.kind === "task"
-                      ? state.jobs
-                      : record.kind === "asset"
-                        ? state.machines
-                        : record.kind === "person"
-                          ? state.people
-                          : record.kind === "field"
-                            ? state.fields
-                            : record.kind === "storageLocation"
-                              ? state.warehouses
-                              : state.stocks;
-                  const item = items.find((item) => item.id === record.id);
-                  return (
-                    item && (
-                      <button
-                        className="resource-link"
-                        type="button"
-                        key={record.kind + record.id}
-                        onClick={() =>
-                          go(routes[record.kind] + "/" + record.id)
-                        }
-                      >
-                        {"title" in item ? item.title : item.name}
-                        <ArrowUpRight size={14} />
-                      </button>
-                    )
-                  );
-                })}
-            </div>
-          </div>
-        );
-      })}
-    </details>
-  );
-}
+const ImpactPreview = DecisionImpacts;
 
 function CategoryIcon({ type }: { type: Category }) {
   const icons = {

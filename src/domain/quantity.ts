@@ -13,3 +13,10 @@ export const isQuantity = (value: unknown): value is number =>
   value >= 0 &&
   value <= 1_000_000 &&
   Math.abs(roundKg(value) - value) < 0.0000001;
+
+// A physical count may be zero; consumption amounts must remain strictly positive.
+export function parseCountQuantity(value: string): number | null {
+  if (!/^\d+(?:[.,]\d{1,3})?$/.test(value.trim())) return null;
+  const number = Number(value.trim().replace(",", "."));
+  return isQuantity(number) ? number : null;
+}
