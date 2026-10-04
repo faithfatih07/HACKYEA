@@ -8,7 +8,9 @@
     "build": "tsc -b && vite build",
     "preview": "vite preview --host 127.0.0.1",
     "test": "vitest run",
-    "format": "prettier --write src package.json tsconfig.json vite.config.ts index.html README.md"
+    "format": "prettier --write src package.json tsconfig.json vite.config.ts index.html README.md",
+    "server": "tsx server/index.ts",
+    "demo": "node scripts/dev.mjs"
   },
   "engines": {
     "node": "^20.19.0 || >=22.12.0"
@@ -16,15 +18,19 @@
   "dependencies": {
     "@fontsource-variable/dm-sans": "^5.3.0",
     "@fontsource-variable/nunito": "^5.3.0",
+    "@google/genai": "^2.27.0",
     "lucide-react": "^0.468.0",
     "react": "^19.1.1",
-    "react-dom": "^19.1.1"
+    "react-dom": "^19.1.1",
+    "zod": "^4.6.5"
   },
   "devDependencies": {
+    "@types/node": "^26.6.4",
     "@types/react": "^19.1.10",
     "@types/react-dom": "^19.1.9",
     "@vitejs/plugin-react": "^5.0.4",
     "prettier": "^3.9.9",
+    "tsx": "^4.23.15",
     "typescript": "~5.9.2",
     "vite": "^7.1.7",
     "vitest": "^3.2.4"

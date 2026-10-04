@@ -45,6 +45,7 @@ export function ActionReview({
   onCancel,
   error,
   busy,
+  confirmationBlocked = false,
 }: {
   state: FarmView;
   draft: ActionDraft;
@@ -54,6 +55,7 @@ export function ActionReview({
   onCancel: () => void;
   error: string;
   busy: boolean;
+  confirmationBlocked?: boolean;
 }) {
   const [amountInput, setAmountInput] = useState<{
     id: string;
@@ -142,7 +144,7 @@ export function ActionReview({
     <form
       onSubmit={(event) => {
         event.preventDefault();
-        if (preview.valid && !busy) onConfirm();
+        if (preview.valid && !busy && !confirmationBlocked) onConfirm();
       }}
     >
       <p className="notice">
@@ -150,6 +152,44 @@ export function ActionReview({
         {t("unchangedUntilApproval")}
       </p>
       <div className="form-grid decision-form">
+        {"taskId" in draft && draft.kind !== "recordConsumption" && (
+          <label className="full-width">
+            {t("job")}
+            <select
+              value={draft.taskId ?? ""}
+              onChange={(e) =>
+                setDraft({ ...draft, taskId: e.target.value || null })
+              }
+            >
+              <option value="">{t("notSpecified")}</option>
+              {state.jobs
+                .filter((j) => j.status === "planned")
+                .map((j) => (
+                  <option key={j.id} value={j.id}>
+                    {j.title}
+                  </option>
+                ))}
+            </select>
+          </label>
+        )}
+        {draft.kind === "setAssetAvailability" && (
+          <label className="full-width">
+            {t("machines")}
+            <select
+              value={draft.assetId ?? ""}
+              onChange={(e) =>
+                setDraft({ ...draft, assetId: e.target.value || null })
+              }
+            >
+              <option value="">{t("notSpecified")}</option>
+              {state.machines.map((a) => (
+                <option key={a.id} value={a.id}>
+                  {a.name}
+                </option>
+              ))}
+            </select>
+          </label>
+        )}
         {task && taskChangeKeys.some((k) => k === draft.kind) && (
           <label className="full-width">
             {t("chooseChange")}
@@ -438,7 +478,10 @@ export function ActionReview({
         >
           {t("cancelDraft")}
         </button>
-        <button className="button dark" disabled={!preview.valid || busy}>
+        <button
+          className="button dark"
+          disabled={!preview.valid || busy || confirmationBlocked}
+        >
           {t("confirmSave")}
           <Check size={18} />
         </button>

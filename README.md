@@ -1,6 +1,6 @@
 # Fieldnote — çiftliğin dijital defteri
 
-Küçük çiftlikler için mobil öncelikli hackathon prototipi. React + TypeScript + Vite ile hazırlanmıştır. Türkçe varsayılandır; üstteki **TR / EN** düğmeleriyle sunum için İngilizce seçilebilir. Dil tercihi bu tarayıcıda saklanır. Ücretli servis, API anahtarı veya gerçek kullanıcı hesabı gerektirmez. Font ve ikonlar yereldir; çalışırken harici servis çağrısı yapmaz.
+Küçük çiftlikler için mobil öncelikli hackathon prototipi. React + TypeScript + Vite ile hazırlanmıştır. Türkçe varsayılandır; üstteki **TR / EN** düğmeleriyle sunum için İngilizce seçilebilir. Dil tercihi bu tarayıcıda saklanır. Anahtarsız demo gerçek kullanıcı hesabı veya servis gerektirmez. İsteğe bağlı Gemini bağlantısı sunucudaki API anahtarını kullanır; Gemini çağrıları Google hesabınızın kota/faturalandırmasına tabidir. Font ve ikonlar yereldir.
 
 Arayüz yetişkin çiftçiler için kompakt başlık, okunaklı DM Sans fontu, yaklaşık 16–18 px ana metin ve en az 48 px dokunma hedefleri kullanır. Zeytin yeşili, kiremit kırmızısı, buğday sarısı ve krem tonları hafif derinlik veren gölgelerle uygulanır. Bugünkü işler, açıklamalı stok açığı ve işlem girişi önceliklidir. Antigravity görselleri kullanılmaz.
 
@@ -12,7 +12,7 @@ Proje klasöründe terminal açıp çalıştırın:
 
 ```sh
 npm install
-npm run dev
+npm run demo
 ```
 
 Terminalde yazan yerel adresi açın: genellikle **http://127.0.0.1:5173**.
@@ -53,9 +53,9 @@ Terminaldeki ağ adresini telefonda açın. Bu komut uygulamayı yerel ağda eri
 
 Miktarı önizlemede değiştirebilir veya **Taslağı iptal et** ile işlemi iptal edebilirsiniz. Fiziksel stoktan fazla tüketim, sıfır/negatif/geçersiz miktar ve yanlış iş–tarla–malzeme eşleştirmeleri engellenir. Nokta veya virgül ile en fazla üç ondalık basamak kabul edilir; binlik ayırıcı kullanmayın.
 
-## Yerel yorumlayıcı
+## Anahtarsız yerel yorumlayıcı (fallback)
 
-Ekranda açıkça **“Demo yorumlayıcı — gerçek AI bağlı değil”** yazısı bulunur. İngilizce seçilirse **“Demo interpreter — no real AI connected”** gösterilir. Yorumlayıcı sadece dar bir yerel metin kalıbını tanır. Gerçek AI gibi serbest cevap üretmez.
+Anahtar yoksa, backend kapalıysa veya API cevabı doğrulanamazsa ekranda açıkça **“Demo yorumlayıcı — gerçek AI bağlı değil”** yazısı bulunur. İngilizce seçilirse **“Demo interpreter — no real AI connected”** gösterilir. Yorumlayıcı sadece dar bir yerel metin kalıbını tanır. Gerçek AI gibi serbest cevap üretmez.
 
 Desteklenen örnekler:
 
@@ -153,7 +153,7 @@ Kalıcı anahtar **fieldnote.demo.v2**'dir. Geçerli **fieldnote.demo.v1** veris
 
 Mevcut ekranlar `selectFarmView` üzerinden aynı merkezi kayıtların görünüm kopyalarını okur; bu kopyalar saklanmaz. Gelecek harita, depo binası veya karakter de kayıt `id`'siyle aynı selector/detail route'u açabilir ve aynı ActionDraft hattını kullanabilir. İsteğe bağlı `presentation.iconKey`, `scenePosition`, `visualState` yalnızca görüntü içindir; etki ve stok kuralları bunlara bakmaz. Bu sürümde oyun haritası eklenmedi.
 
-Gelecekte gerçek AI adaptörü yalnızca şemaya uygun ActionDraft önerecek. `isActionDraft`, `previewAction` ve kullanıcı seçimi/onayı üzerinden mevcut hat kullanılacak; yorumlayıcı localStorage veya repository yazma yetkisi almayacak. Backend ve veritabanı eklenince aynı kurallar sunucuda çalıştırılmalı; API anahtarı sunucuda kalmalı.
+Gemini adaptörü yalnızca şemaya uygun çıkarım önerir; uygulama bunu ActionDraft biçimine dönüştürür. `isActionDraft`, `previewAction` ve kullanıcı seçimi/onayı üzerinden mevcut hat kullanılır; yorumlayıcının localStorage veya repository yazma yetkisi yoktur. Üretim veritabanı eklenince aynı domain kuralları sunucuda da çalıştırılmalıdır; API anahtarı zaten yalnızca sunucuda kalır.
 
 ## Kararın etkileri demosu
 
@@ -178,10 +178,10 @@ Saklama sürümü/anahtarı v2 kalır. Kişi müsaitliği, onarım zamanı, fiya
 
 ## Sürümün sınırları
 
-- Tek çiftlik, tek demo kullanıcı; gerçek giriş, kullanıcı yetkileri veya sunucu yoktur.
+- Tek çiftlik, tek demo kullanıcı. Yerel AI sunucusu vardır; gerçek giriş ve ekip yetkilendirmesi henüz yoktur. API yalnızca 127.0.0.1 üzerinde dinler; üretim dağıtımı için yetkilendirme ve istek sınırı gerekir.
 - Tarla, ürün, depo, kişi ve makine ekleme ekranı yoktur. Mevcut örneklerin müsaitliği, iş atamaları, planlanan miktar, hizmet alternatifi ve fiziksel stok sayımı onayla değiştirilebilir. Stok girişi/iadesi sonraki aşamadır.
-- Gerçek AI, RAG, sensör, hava durumu, bildirim servisi veya doküman araması yoktur.
-- Gübre/ilaç belge desteği **Henüz bağlı değil / Not connected yet** olarak gösterilir. Gerçek etiket, doz, teşhis veya güvenli kullanım tavsiyesi üretilmez.
+- Gemini adaptörü ve iki sentetik belge üzerinde metin araması vardır; sensör, hava durumu, bildirim servisi, embedding veya harici vektör veritabanı yoktur.
+- Gerçek belge yükleme ve belge doğrulama iş akışı henüz bağlı değildir. Yalnızca açıkça hayalî iki demo kaynak kullanılır. Gerçek etiket, doz, teşhis veya güvenli kullanım tavsiyesi üretilmez.
 - Dar yorumlayıcı tüm Türkçe/İngilizce cümleleri anlayamaz. Yalnızca belgelenen kalıplar desteklenir.
 - Kısmi bir miktarın onaylanması işi tamamlar; iş başına bir tüketim kaydı vardır. Çok aşamalı tüketim ve gerçekleşen tüketimi geri alma/iptal sonraki aşamadır.
 - Ekimde tohum bilgisi yoktur; ekim tamamlama miktarı bilinmeyen gerçekleşen iş ve geçmiş kaydı oluşturur. Tarla ürün aşaması otomatik güncellenmez.
@@ -193,12 +193,87 @@ Saklama sürümü/anahtarı v2 kalır. Kişi müsaitliği, onarım zamanı, fiya
 - Taslak henüz onaylanmadığı için yalnızca sayfa içinde tutulur; sayfa yenilenirse taslak silinir, onaylanmış kayıtlar kalır.
 - PWA/offline kurulum ve service worker yoktur. Kurulumdan sonra uygulama servis veya anahtar gerektirmez, ancak yerel geliştirme/preview sunucusu açık olmalıdır.
 
-## Gerçek AI için sonraki adım
+## Gemini bağlantısı ve belge araması
 
-`FarmInterpreter` arayüzünü uygulayan bir backend adaptörü ekleyin. Frontend, metni ve sınırlı kayıt bağlamını sunucudaki endpoint’e gönderir; sunucu, gizli ortam değişkeninde tutulan API anahtarıyla modelden şemaya uygun **taslak** ister. Anahtar `VITE_*` değişkenine veya tarayıcı koduna konulmaz.
+Gemini Developer API için resmi [`@google/genai` SDK](https://googleapis.github.io/js-genai/) ve `gemini-3.1-flash-lite` modeli kullanılır. Yanıtlar JSON Schema ile istenir ve Zod ile hem sunucuda hem istemcide doğrulanır. Geçersiz JSON, bilinmeyen kayıt/kanıt kimliği ve desteklenmeyen belge iddiaları reddedilir.
 
-Model yalnızca kayıt eşleştirme ve taslak önerisi yapar. Hesap, stok yeterliliği, yetki, kullanıcı onayı ve idempotent transaction sunucu tarafından doğrulanır; mevcut önizleme/onay deneyimi korunur. Ardından veritabanı, oturum ve ekip yetkilendirmesi eklenir. Belge/RAG desteği ayrı bir aşamadır ve bu prototipte bağlı değildir.
+### Anahtar ve çalıştırma
+
+Proje kökünde `.env.example` dosyasını `.env` olarak kopyalayın:
+
+```sh
+cp .env.example .env
+```
+
+`.env` içindeki `your_key_here` yerine kendi Gemini Developer API anahtarınızı yazın:
+
+```dotenv
+GEMINI_API_KEY=your_key_here
+```
+
+Anahtarı buradaki sunucu ortam değişkenine yazın; `VITE_*`, tarayıcı kodu veya localStorage kullanmayın. `.env` Git tarafından yok sayılır; `.env.example` yalnızca yer tutucu içerir. Anahtar `.env` değiştirildiğinde backend'i yeniden başlatın. Anahtar Google AI Studio'dan alınır; model erişimi/kota hesabınıza bağlıdır.
+
+İki sunucuyu tek komutla başlatın:
+
+```sh
+npm run demo
+```
+
+Frontend: `http://127.0.0.1:5173` (doluysa Vite sonraki portu kullanır). Backend: `http://127.0.0.1:3001`. Önceden çalışan Vite varsa yeni `npm run demo` terminalindeki adresi kullanın veya önce eski geliştirme sürecini durdurun.
+
+Ayrı terminaller kullanmak isterseniz:
+
+```sh
+# Terminal 1
+npm run server
+# Terminal 2
+npm run dev
+```
+
+Vite `/api` isteklerini yerel backend'e yönlendirir. `npm run preview` de aynı proxy'yi kullanır ve backend ayrıca açık olmalıdır. `npm run build` frontend ve backend TypeScript kodunu kontrol eder; Vite yalnızca istemciyi `dist/` içine derler. Sunucu `tsx server/index.ts` ile çalışır.
+
+Anahtar yoksa veya yer tutucu değiştirilmemişse **Demo yorumlayıcı — gerçek AI bağlı değil** kullanılır. Backend/API hatası ve geçersiz çıktı kullanıcıya genel bir mesajla açıklanır; SDK hatası veya anahtar istemciye/loga döndürülmez. Kaynak kartları ve doğrulanmış yerel belge araması anahtarsız da çalışır ve **AI cevabı değildir** diye etiketlenir. Başarılı Gemini cevabından sonra **Gemini destekli yorumlama** gösterilir; yalnızca anahtarın varlığı bağlantı başarısı sayılmaz.
+
+### Deneme
+
+**Bugün → Çiftlikte ne oldu?** alanında anahtar ile şu ifadeleri deneyin:
+
+- “Kuzey tarlasında 600 kilo gübre kullandık.” / “Kuzeye 600 kg gübre attık.”
+- “Ali kuzeyde 12 çuval gübre kullandı.” (AI 12 çuvalı çıkarır; uygulama doğrulanmış 50 kg ambalaj kaydıyla 600 kg hesaplar ve kaynağı gösterir.)
+- “Kırmızı traktör bozuldu.” / “Traktörü kullanım dışı yap.”
+- “Kuzey gübrelemeyi pazartesiye al.” / “Kuzeydeki işi pazartesi sabahına taşı.” (belirsiz görev/saat seçilir; sabah için saat uydurulmaz.)
+
+Düzenlenebilir taslak ve mevcut **Kararın etkileri** gösterilir. Eksik alanlar ve belirsizlikler kullanıcı tarafından giderilir. **Onayla ve kaydet** öncesinde hiçbir kayıt değişmez. 600 kg için uygulama hesabı 800→200 kg ve Doğu'nun 300 kg ihtiyacına karşı 100 kg açık gösterir. Mevcut idempotency, transaction ve audit davranışı aynen korunmuştur. Anahtarsız fallback yalnızca yukarıdaki dar yorumlayıcı kalıplarını anlar; Gemini'nin serbest dil anlayışını taklit etmez.
+
+**Bugün → Belge desteği** veya **Çiftliğim → Belge desteği** üzerinden demo ürünü açın; ürün detayındaki **Belgeye sor** alanını kullanın. Ana girişte de belge sorulabilir:
+
+- “Demo Gübre A’dan bir çuval kaç kilo?” → kaynaklı 50 kg bilgisi.
+- “Bu gübreyi dekara kaç kilo uygulamalıyım?” → bilgi bulunamadı; 600 kg planın hayalî, önceden girilmiş miktar olduğu açıklanır.
+- “Demo İlaç B uygulamasından sonra ne zaman hasat edebilirim?” → sentetik 10×24 saat kaynağı; önce uygulama tarihi **ve saati** istenir. Süreyi uygulama kodu tam 240 saat ekleyerek hesaplar; gerçek ilaçlara uygulanmaz.
+
+**Kaynağı göster** kartları `sourceId / sectionId` ve orijinal Türkçe bölüm metnini açar. UI TR/EN değişebilir, kaynak metni özgün hâliyle kalır.
+
+### Mimari ve sınırlar
+
+- `server/index.ts`: yerel Node HTTP sunucusu, server-only `.env`, JSON boyut sınırı, aynı yerel origin kontrolü; `GET /api/status` ve `POST /api/interpret`.
+- `server/provider.ts`: `AIProvider` arayüzü ve Gemini adaptörü. Testler mock provider kullanır; gerçek Gemini/dış ağ çağrısı yapmaz.
+- `server/service.ts`: istek/yanıt doğrulama, gerekli belge parçalarını seçme, güvenli hata/fallback. Repository veya commit erişimi yoktur.
+- `src/ai/schema.ts`: sıkı istek/model/istemci cevap şemaları; yalnızca bu çiftliğin planlanan görevleri, alanları, kişiler, makineler, ürünler ve stoktan gerekli alanları seçer. İşlem/geçmiş kayıtları ve saklanan tüm state gönderilmez.
+- `src/ai/adaptDraft.ts`: AI çıkarımını mevcut `ActionDraft` biçimine saf olarak dönüştürür. Kimlikleri uygulama üretir; çuval dönüşümünü doğrulanmış kaynakla uygulama hesaplar.
+- `src/ai/documents.ts`: kimlikli, salt okunur demo kaynak kataloğu ve küçük metin araması. Mevcut v2 localStorage verisini değiştirmez veya sıfırlamaz. Demo İlaç B yalnızca belge kataloğundadır; fiziksel stok veya gerçekleşmiş uygulama kaydı uydurulmaz.
+- `src/ai/answers.ts`: kaynak kimliği, seçilmiş bölüm ve desteklenen gerçek kontrolü; cevap metnini yalnızca doğrulanmış demo bilgilerinden üretir. Modelin serbest metnine, aritmetiğine veya başka ürün için bildiği bilgilere güvenilmez. Bilinmeyen soru için cevap uydurulmaz.
+- `src/components/DocumentQuestion.tsx`, `AIReviewNote.tsx`: yükleniyor, fallback, eksik bilgi, AI atfı, kaynağı açma ve tarih sorusu. `ActionReview` / `DecisionImpacts` mevcut önizleme ve onayı kullanır. Etki motoru değiştirilmemiştir.
+
+**ActionDraft → validation → impact preview → kullanıcı confirmation → repository commit** zinciri aynı kalır. AI hiçbir kaydı değiştiremez; bu sürümde domain ve localStorage hâlâ tarayıcıdadır. Gelecek harita/bina/karakter ekranları aynı domain kimlikleri, taslak ve onay hattını kullanabilir.
+
+Belge içeriği ve kullanıcı metni sistem talimatı değildir: sunucunun prompt'u bunu açıkça sınırlar. Sıkı şema, yalnızca önceden seçilen kaynak kimlikleri ve uygulamanın doğrulanmış cevap üretimi belge içindeki talimatlardan bağımsızdır. AI'nın tarım/doz, stok veya maliyet sonucu uygulama hesabı gibi gösterilmez. Stok/iş/kişi/makine/teklif kanıtları mevcut merkezi kayıtları açar; teklif metni yükleme ve “nakliye hariç” gibi alıntıları gerçek belgeye bağlama henüz uygulanmadı.
+
+Model adaptörü şu üç olay türünü destekler: tüketim, makine müsaitliği ve görev tarihi. Diğer domain eylemleri mevcut elle düzenleme ekranlarında çalışır; AI desteği sonraki aşamadır. Gerçek PDF/etiket yükleme, gerçek belge doğrulama, kapsamlı arama, hesap yetkilendirmesi ve üretim sunucusu bu sürüme dahil değildir. Üretimde kimlik doğrulama, sunucu tarafı yetki/doğrulama, kalıcı veritabanı ve rate limiting eklenmelidir.
 
 ## Bu değişikliğin kontrol sonucu
 
-`npm test`: **97/97 test geçti** (önceki 69 test korundu, 28 yeni test eklendi). `npm run build`: TypeScript ve Vite üretim derlemesi başarılı. Tarayıcıda 320 px ve 390 px genişlikte Bugün, arıza önizlemesi, tarih değişikliği ve tüketim/stok ekranları kontrol edildi; sayfa ve dialog içinde yatay taşma görülmedi. Arıza ve tarih onayı, kanıt kayıtlarına geçiş/dönüş, 600 kg tüketim onayı, yenilemede 200 kg stok ve tek tüketim kaydının korunması, sıfır sayım taslağının iptali ve TR/EN geçişi kontrol edildi. Yeni kayıtlar için reset repository testiyle doğrulandı. Kontrol için ayrı 5174 origin'i kullanıldı; mevcut 5173 tarayıcı verileri değiştirilmedi.
+`npm test`: **123/123 test geçti**; önceki 97 test korundu, 26 yeni test eklendi. `npm run build`: frontend ve backend TypeScript kontrolü ile Vite üretim derlemesi başarılı. Zod paketinin iki yorum anotasyonu için zararsız Rollup uyarısı var.
+
+Anahtar olmadan gerçek yerel HTTP endpoint test edildi: `/api/status` yapılandırılmadı, `/api/interpret` `demo/no_key` döndü. Mobil tarayıcıda 320 px ve 390 px genişlikte yatay taşma görülmedi. 600 kg taslakta 800→200 kg ve 100 kg açık, onay sonrası 200 kg stok, yenilemede kalıcılık, tek girişten kaynaklı çuval cevabı, kaynak bölümünü açma, belgede olmayan doz cevabı, sentetik ilaçta tarih/saat sorusu ve 10 gün hesabı, ürün detayına erişim ve TR/EN kontrol edildi. Kontrol için ayrı 5175 origin kullanıldı; mevcut 5173 verileri değiştirilmedi.
+
+İlk kontroller anahtarsız yapıldı. Daha sonra başlatılan canlı Gemini testi kullanıcı tarafından durduruldu ve henüz tamamlanmadı. Model erişimi ve iki senaryonun gerçek API üzerinden çalışması başarılı veya tamamlanmış sayılmamalıdır. SDK/model/prompt ve JSON sınırları mock provider ile doğrulandı; bütün otomatik testler dış ağ kullanmadan çalıştı. `.env`, `node_modules` ve `dist` ignore kontrolü yapıldı; istemci bundle içinde SDK/API adresi/anahtar değişkeni bulunmadı. Bu checkpoint canlı API başarısı iddiası taşımaz; canlı Gemini doğrulaması ayrıca tamamlanmalıdır.

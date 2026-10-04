@@ -57,6 +57,18 @@ import {
   previewOperation,
 } from "./domain/operations";
 import { demoInterpreter } from "./interpreter/demoInterpreter";
+import { requestInterpretation } from "./ai/client";
+import { adaptActionDraft } from "./ai/adaptDraft";
+import { localDocumentInterpretation } from "./ai/answers";
+import {
+  documentProducts,
+  documentSections,
+  isDocumentQuestion,
+} from "./ai/documents";
+import type { DocumentInterpretation } from "./ai/schema";
+import { DocumentQuestion, SourceCards } from "./components/DocumentQuestion";
+import { AIReviewNote } from "./components/AIReviewNote";
+import type { AIReviewMetadata } from "./components/AIReviewNote";
 import type { ActionDraft, OperationDraft, PlanDraft } from "./domain/types";
 import {
   isTaskBlocked,
@@ -109,6 +121,16 @@ export default function App() {
   const [text, setText] = useState("");
   const [interpreterError, setInterpreterError] = useState("");
   const [actionError, setActionError] = useState("");
+  const [aiProvider, setAIProvider] = useState<"demo" | "gemini">("demo");
+  const [aiMetadata, setAIMetadata] = useState<AIReviewMetadata | null>(null);
+  const [aiAcknowledged, setAIAcknowledged] = useState(false);
+  const [documentEntry, setDocumentEntry] = useState<{
+    question: string;
+    result: DocumentInterpretation;
+  } | null>(null);
+  const aiQuestionsPending = Boolean(
+    aiMetadata?.questions.length && !aiAcknowledged,
+  );
   const [toast, setToast] = useState<{
     key: MessageKey;
     values: Record<string, number>;
@@ -156,11 +178,13 @@ export default function App() {
     setActionError("");
   };
   const startChange = (kind: ActionDraft["kind"], targetId: string) => {
+    setAIMetadata(null);
     setChangeDraft(createChangeDraft(rawState, kind, targetId));
     setShowChange(true);
     setActionError("");
   };
   const startDraft = (job: Job) => {
+    setAIMetadata(null);
     setDraft({
       id: createId(),
       jobId: job.id,
@@ -174,7 +198,58 @@ export default function App() {
   const interpret = async () => {
     setInterpreterError("");
     setBusy(true);
+    setAIMetadata(null);
+    setAIAcknowledged(false);
+    setDocumentEntry(null);
     try {
+      const response = await requestInterpretation(text, rawState, language);
+      setAIProvider(response.provider);
+      if (response.provider === "gemini") {
+        if (response.result.mode === "DOCUMENT_ANSWER") {
+          setDocumentEntry({ question: text, result: response.result });
+          return;
+        }
+        const adapted = adaptActionDraft(
+          rawState,
+          response.result,
+          undefined,
+          text,
+        );
+        setAIMetadata({
+          summary: response.result.userFacingSummary,
+          questions: adapted.questions,
+          bagConversion: adapted.bagConversion,
+        });
+        if (adapted.draft.kind === "recordConsumption") {
+          const action = adapted.draft;
+          setDraft({
+            id: action.id,
+            jobId: action.taskId ?? "",
+            fieldId: action.fieldId ?? "",
+            stockId: action.inventoryBalanceId ?? "",
+            quantity:
+              action.actualQuantity === null
+                ? ""
+                : String(action.actualQuantity),
+          });
+          setShowDraft(true);
+        } else {
+          setChangeDraft(adapted.draft);
+          setShowChange(true);
+        }
+        setActionError("");
+        return;
+      }
+      if (response.reason !== "no_key")
+        setInterpreterError(t("aiFallbackNotice"));
+      // Read-only document lookup is available even without a model, clearly labelled.
+      if (isDocumentQuestion(text)) {
+        setDocumentEntry({
+          question: text,
+          result: localDocumentInterpretation(text),
+        });
+        return;
+      }
       const result = await demoInterpreter.interpret(text, rawState);
       if (result.kind === "unsupported") {
         setInterpreterError(result.message);
@@ -195,15 +270,14 @@ export default function App() {
       setActionError("");
       setShowDraft(true);
     } catch {
-      setInterpreterError(
-        t("theEntryCouldNotBeReadNothingChangedTryOneOfTheSupportedExamples"),
-      );
+      setAIProvider("demo");
+      setInterpreterError(t("aiInvalidNotice"));
     } finally {
       setBusy(false);
     }
   };
   const confirm = async () => {
-    if (!draft || busy) return;
+    if (!draft || busy || aiQuestionsPending) return;
     setBusy(true);
     setActionError("");
     try {
@@ -535,7 +609,7 @@ export default function App() {
                 onClick={interpret}
                 disabled={!text.trim() || busy}
               >
-                {t("reviewEntry")}
+                {t(busy ? "aiLoading" : "reviewEntry")}
                 <ArrowRight size={18} />
               </button>
               {interpreterError && (
@@ -545,8 +619,21 @@ export default function App() {
               )}
               <div className="interpreter-label">
                 <span className="demo-dot" />
-                {t("interpreterLabel")}
+                {t(
+                  aiProvider === "gemini" ? "geminiLabel" : "interpreterLabel",
+                )}
               </div>
+              <p className="fine-print">{t("aiPrivacy")}</p>
+              {documentEntry && (
+                <DocumentQuestion
+                  key={documentEntry.question}
+                  state={rawState}
+                  initialQuestion={documentEntry.question}
+                  initialResult={documentEntry.result}
+                  initialProvider={aiProvider}
+                  onProvider={setAIProvider}
+                />
+              )}
               <details
                 className="examples"
                 open={Boolean(interpreterError) || undefined}
@@ -861,7 +948,7 @@ export default function App() {
             <button className="button light" onClick={() => setModal("docs")}>
               <FileText size={18} />
               {t("documentSupport")}{" "}
-              <span className="pill neutral">{t("notConnectedYet")}</span>
+              <span className="pill neutral">{t("syntheticDocument")}</span>
             </button>
             <button
               className="button danger-light"
@@ -1350,7 +1437,9 @@ export default function App() {
       <NotFound go={go} />
     );
   } else if (section === "products" && id) {
-    const product = rawState.products.find((p) => p.id === id);
+    const product =
+      rawState.products.find((p) => p.id === id) ??
+      documentProducts.find((p) => p.id === id);
     content = product ? (
       <>
         {back(t("inventory"), "inventory")}
@@ -1368,10 +1457,14 @@ export default function App() {
                 {resource(`${b.name} · ${kg(b.quantity)}`, `inventory/${b.id}`)}
               </DetailRow>
             ))}
+          <SourceCards
+            sections={documentSections.filter((s) => s.productId === id)}
+          />
           <button className="button light" onClick={() => setModal("docs")}>
-            {t("fertilizerPesticideDocuments")}
+            {t("demoDocumentCatalog")}
           </button>
         </section>
+        <DocumentQuestion key={id} state={rawState} productId={id} />
       </>
     ) : (
       <NotFound go={go} />
@@ -1586,22 +1679,31 @@ export default function App() {
           onClose={() => setShowChange(false)}
           wide
         >
+          {aiMetadata && (
+            <AIReviewNote
+              metadata={aiMetadata}
+              acknowledged={aiAcknowledged}
+              onAcknowledge={setAIAcknowledged}
+            />
+          )}
           <ActionReview
             state={state}
             draft={changeDraft}
             setDraft={(next) => {
+              setAIAcknowledged(false);
               setChangeDraft(next);
               setActionError("");
             }}
             go={go}
             error={actionError}
             busy={busy}
+            confirmationBlocked={aiQuestionsPending}
             onCancel={() => {
               setChangeDraft(null);
               setShowChange(false);
             }}
             onConfirm={async () => {
-              if (busy) return;
+              if (busy || aiQuestionsPending) return;
               setBusy(true);
               setActionError("");
               try {
@@ -1630,10 +1732,18 @@ export default function App() {
           onClose={() => setShowDraft(false)}
           wide
         >
+          {aiMetadata && (
+            <AIReviewNote
+              metadata={aiMetadata}
+              acknowledged={aiAcknowledged}
+              onAcknowledge={setAIAcknowledged}
+            />
+          )}
           <DraftReview
             state={state}
             draft={draft}
             setDraft={(next) => {
+              setAIAcknowledged(false);
               setDraft(next);
               setActionError("");
             }}
@@ -1641,6 +1751,7 @@ export default function App() {
             error={actionError}
             busy={busy}
             onConfirm={confirm}
+            confirmationBlocked={aiQuestionsPending}
             onCancel={() => {
               setDraft(null);
               setShowDraft(false);
@@ -1684,25 +1795,19 @@ export default function App() {
           title={t("aHomeForYourDocuments")}
           onClose={() => setModal(null)}
         >
-          <div className="unconnected">
-            <FileText size={48} />
-            <span className="pill yellow">{t("notConnectedYet")}</span>
-            <h3>{t("fertilizerPesticideDocuments")}</h3>
-            <p>
-              {t(
-                "documentUploadLabelLookupAndRetrievalAreNotConnectedInThisFirstVersion",
-              )}
-            </p>
-            <p>
-              {t(
-                "theNotebookUsesASmallLocalDemoInterpreterThereIsNoModelRagServiceOrApi",
-              )}
-            </p>
-            <button className="button dark full" onClick={() => setModal(null)}>
-              {t("gotIt")}
-              <Check size={17} />
+          <p>{t("documentScope")}</p>
+          <p className="fine-print">{t("syntheticDisclaimer")}</p>
+          {documentProducts.map((product) => (
+            <button
+              key={product.id}
+              className="button light full"
+              onClick={() => go(`products/${product.id}`)}
+            >
+              {product.name}
+              <ChevronRight size={18} />
             </button>
-          </div>
+          ))}
+          <SourceCards sections={documentSections} />
         </Dialog>
       )}
       {modal === "reset" && (
@@ -1965,6 +2070,7 @@ function DraftReview({
   go,
   error,
   busy,
+  confirmationBlocked = false,
   onConfirm,
   onCancel,
 }: {
@@ -1974,6 +2080,7 @@ function DraftReview({
   go: (route: string) => void;
   error: string;
   busy: boolean;
+  confirmationBlocked?: boolean;
   onConfirm: () => void;
   onCancel: () => void;
 }) {
@@ -2210,7 +2317,7 @@ function DraftReview({
         </button>
         <button
           className="button dark"
-          disabled={!preview.valid || busy}
+          disabled={!preview.valid || busy || confirmationBlocked}
           onClick={onConfirm}
         >
           <Check size={18} />

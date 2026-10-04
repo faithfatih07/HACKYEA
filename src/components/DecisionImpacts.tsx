@@ -169,6 +169,7 @@ export function DecisionImpacts({
   } as const;
   return (
     <section className="decision-impacts" aria-label={t("decisionImpacts")}>
+      <small className="pill">{t("recordsCalculated")}</small>
       <h3>
         <Link2 size={20} />
         {t("decisionImpacts")}

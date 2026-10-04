@@ -3463,3 +3463,81 @@ body {
 .farm-heading .eyebrow {
   color: #687b5d;
 }
+/* AI and document additions keep the existing mobile layout and touch targets. */
+.document-question {
+  margin-top: 18px;
+  padding: 18px;
+  min-width: 0;
+}
+.document-question label {
+  display: grid;
+  gap: 8px;
+  margin: 12px 0;
+}
+.document-question textarea,
+.document-question input {
+  width: 100%;
+  min-width: 0;
+  box-sizing: border-box;
+  font: inherit;
+  padding: 12px;
+  border: 1px solid #9a9d85;
+  border-radius: 12px;
+  background: #fffdf5;
+  color: #242d20;
+}
+.document-question input,
+.source-card summary {
+  min-height: 48px;
+}
+.source-cards {
+  display: grid;
+  gap: 10px;
+  margin: 12px 0;
+  min-width: 0;
+}
+.source-card {
+  border: 1px solid #b3b7a0;
+  border-radius: 12px;
+  background: #fffdf5;
+  padding: 0 12px;
+  overflow-wrap: anywhere;
+}
+.source-card summary {
+  cursor: pointer;
+  padding: 12px 0;
+  box-sizing: border-box;
+  font-weight: 650;
+}
+.source-card strong,
+.source-card small {
+  display: block;
+  margin: 6px 0;
+}
+.document-answer,
+.ai-review-note {
+  padding: 14px;
+  background: #f5f0db;
+  border: 1px solid #b8b89c;
+  border-radius: 12px;
+  margin-top: 16px;
+  overflow-wrap: anywhere;
+}
+.ai-review-note {
+  margin-bottom: 18px;
+}
+.ai-ack {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-height: 48px;
+}
+.ai-ack input {
+  width: 24px;
+  height: 24px;
+  flex-shrink: 0;
+}
+.source-card p,
+.document-answer p {
+  line-height: 1.6;
+}
