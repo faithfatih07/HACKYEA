@@ -277,3 +277,17 @@ Model adaptörü şu üç olay türünü destekler: tüketim, makine müsaitliğ
 Anahtar olmadan gerçek yerel HTTP endpoint test edildi: `/api/status` yapılandırılmadı, `/api/interpret` `demo/no_key` döndü. Mobil tarayıcıda 320 px ve 390 px genişlikte yatay taşma görülmedi. 600 kg taslakta 800→200 kg ve 100 kg açık, onay sonrası 200 kg stok, yenilemede kalıcılık, tek girişten kaynaklı çuval cevabı, kaynak bölümünü açma, belgede olmayan doz cevabı, sentetik ilaçta tarih/saat sorusu ve 10 gün hesabı, ürün detayına erişim ve TR/EN kontrol edildi. Kontrol için ayrı 5175 origin kullanıldı; mevcut 5173 verileri değiştirilmedi.
 
 İlk kontroller anahtarsız yapıldı. Daha sonra başlatılan canlı Gemini testi kullanıcı tarafından durduruldu ve henüz tamamlanmadı. Model erişimi ve iki senaryonun gerçek API üzerinden çalışması başarılı veya tamamlanmış sayılmamalıdır. SDK/model/prompt ve JSON sınırları mock provider ile doğrulandı; bütün otomatik testler dış ağ kullanmadan çalıştı. `.env`, `node_modules` ve `dist` ignore kontrolü yapıldı; istemci bundle içinde SDK/API adresi/anahtar değişkeni bulunmadı. Bu checkpoint canlı API başarısı iddiası taşımaz; canlı Gemini doğrulaması ayrıca tamamlanmalıdır.
+
+## Checkpoint sonrası canlı Gemini kontrolü — 2026-10-04
+
+Önceki checkpoint sırasında durdurulan canlı test bu yerel çalışmada tamamlandı. `npm run demo` ile sunucu yeniden başlatıldı. Anahtar yalnızca sunucu tarafındaki `.env` üzerinden okundu; anahtar çıktıya, istemciye veya Git'e aktarılmadı. Mevcut sunucu kodunun yapılandırdığı `gemini-3.1-flash-lite` kimliği gerçek Developer API `models.get` çağrısıyla doğrulandı; model kimliği tahmin edilmedi.
+
+Temiz demo için ayrı `http://127.0.0.1:5176` origin'i ve bellek içindeki `createDemoState()` kullanıldı. Mevcut 5173 kullanıcı kayıtlarına müdahale edilmedi. Üç senaryo da gerçek `provider: gemini` cevabıyla ve tarayıcıdaki **Gemini destekli yorumlama** etiketiyle kontrol edildi; demo fallback canlı başarı sayılmadı:
+
+1. **Ali kuzeyde 12 çuval gübre kullandı.** → AI 12 çuvalı çıkardı; uygulama doğrulanmış `doc-fertilizer-a / packaging` kaydındaki 50 kg/çuval ile **600 kg** taslak hesapladı. Mevcut etki motorunun önizlemesi **800 → 200 kg** ve Doğu'nun 300 kg ihtiyacı için **100 kg açık** gösterdi. Taslak onaylanmadı.
+2. **Bu gübreyi dekara kaç kilo uygulamalıyım?** → belgede doz bulunmadığı açıkça gösterildi; `unavailable` sonucu ve `doc-fertilizer-a / unrecorded` kaynağı kullanıldı. Doz üretilmedi; 600 kg planın önceden girilmiş hayalî miktar olduğu açıklandı.
+3. **Demo Gübre A’dan bir çuval kaç kilo?** → **50 kg** cevabı ve `doc-fertilizer-a / packaging` kaynağı gösterildi; kaynak kartından orijinal bölüm açıldı.
+
+Canlı kontrolde modelin tüketim formunda bulunmayan tarih/saat alanlarını istemesi görüldü. Yalnızca `server/provider.ts` sistem talimatı netleştirildi: bu sorular tarih değiştirme eylemine aittir; tüketim taslağında istenmez. Özetin kaydedilmiş işlem yerine onaylanmamış taslağı anlatması istendi. Düzeltmeden sonra tüketim senaryosu gerçek API ile tekrar geçti. Arayüz, etki motoru ve onay hattı değiştirilmedi; QR/OCR eklenmedi.
+
+Son fiziksel stok **800 kg**, tüketim kaydı **yok**, Kuzey ve Doğu işleri **planlandı** olarak kaldı. API hata kodu oluşmadı. Düzeltme sonrası `npm run build` başarılı ve `npm test` **123/123** geçti. Otomatik testler yine mock provider kullanır; canlı çağrılar otomatik testlere eklenmedi. Bu yerel kontrolün ardından push yapılmadı.
